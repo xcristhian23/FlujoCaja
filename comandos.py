@@ -6,6 +6,11 @@ from io import BytesIO
 import zipfile
 import plotly.express as px
 
+import plotly.io as pio
+pio.kaleido.scope.default_format = "png"
+pio.kaleido.scope.default_scale = 2
+pio.kaleido.scope.default_width = 600
+pio.kaleido.scope.default_height = 400
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
@@ -332,12 +337,12 @@ if archivo:
             # -----------------------------
             zipf.writestr(
                 "grafico_ingresos_egresos.png",
-                fig_pie.to_image(format="png", scale=2)
+                fig_pie.to_image(format="png", engine="kaleido", scale=2)
             )
 
             zipf.writestr(
                 "grafico_resultados.png",
-                fig_bar.to_image(format="png", scale=2)
+                fig_bar.to_image(format="png", engine="kaleido",scale=2)
             )
 
         zip_buffer.seek(0)
@@ -433,8 +438,8 @@ if archivo:
         pie_img = BytesIO()
         bar_img = BytesIO()
 
-        fig_pie.write_image(pie_img, format="png", width=600, height=400)
-        fig_bar.write_image(bar_img, format="png", width=700, height=450)
+        fig_pie.write_image(pie_img, format="png", engine="kaleido", width=600, height=400)
+        fig_bar.write_image(bar_img, format="png", engine="kaleido", width=700, height=450)
 
         pie_img.seek(0)
         bar_img.seek(0)
