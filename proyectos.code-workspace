@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "../proyectos"
+		},
+		{
+			"path": "../Frank"
+		},
+		{
+			"path": "../proyectos/Sistema-Caja"
+		},
+		{
+			"path": "../proyectos/flujo-caja-v2"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "proyectos"
+	}
+}
