@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-
-from io import BytesIO
 import zipfile
 import plotly.express as px
 
@@ -18,6 +16,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
 from io import BytesIO
+
 from datetime import datetime
 from reportlab.platypus import Paragraph
 from reportlab.lib.styles import ParagraphStyle
@@ -435,14 +434,14 @@ if archivo:
         # -------------------------------
         # EXPORTAR GRÁFICOS A IMAGEN
         # -------------------------------
-        pie_img = BytesIO()
-        bar_img = BytesIO()
+        pie_img = BytesIO(
+        fig_pie.to_image(format="png", engine="kaleido", scale=2)
+        )
 
-        fig_pie.write_image(pie_img, format="png", engine="kaleido", width=600, height=400)
-        fig_bar.write_image(bar_img, format="png", engine="kaleido", width=700, height=450)
+        bar_img = BytesIO(
+        fig_bar.to_image(format="png", engine="kaleido", scale=2)
+        )
 
-        pie_img.seek(0)
-        bar_img.seek(0)
 
         story.append(Paragraph("<b>Distribución de Ingresos y Egresos</b>", styles["Heading2"]))
         story.append(Spacer(1, 8))
