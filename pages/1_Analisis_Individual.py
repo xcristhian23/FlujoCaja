@@ -22,17 +22,56 @@ from datetime import datetime
 from reportlab.platypus import Paragraph
 from reportlab.lib.styles import ParagraphStyle
 
-
 st.set_page_config(page_title="Control de Caja 2026", layout="wide")
 
 # --------------------------------------------------
-# CONTROL DE ACCESO
+# USUARIOS Y ROLES
 # --------------------------------------------------
 
-PASSWORD = "finanzas2026."
+USUARIOS = {
+    "admin": {
+        "password": "finanzas2026.",
+        "rol": "admin"
+    },
+    "operador": {
+        "password": "operador2026.",
+        "rol": "operador"
+    }
+}
 
-if "autenticado" not in st.session_state:
-    st.session_state["autenticado"] = False
+if "rol" not in st.session_state:
+    st.session_state["rol"] = "lectura"
+
+st.info(f"Usuario activo: {st.session_state['rol'].upper()}")
+
+# sincronizar URL Y session_state con esos filtros
+if "filtros_guardados" in st.session_state:
+
+    filtros = st.session_state["filtros_guardados"]
+
+    for k, v in filtros.items():
+        st.query_params[k] = v
+
+        if k != "columnas":
+            if isinstance(v, str):
+                v = [v]
+
+            st.session_state[f"filtro_{k}"] = v
+
+    # Sincronizar mes si existe
+    if "mes" in filtros:
+        st.session_state["mes_seleccionado"] = filtros["mes"]
+
+    # Sincronizar columnas si existen
+    if "columnas" in filtros:
+        columnas = filtros["columnas"]
+
+        if isinstance(columnas, str):
+            columnas = columnas.split(",")
+
+        st.session_state["columnas_filtro"] = columnas
+
+    del st.session_state["filtros_guardados"]
 
 import os
 from urllib.parse import urlencode
@@ -84,11 +123,10 @@ def cargar_excel(archivo):
 # --------------------------------------------------
 # UI
 # --------------------------------------------------
-#st.title("💰 Sistema de Control de Caja")
 col1, col2 = st.columns([6,1])
 
 with col1:
-    st.title("💰 Sistema de Control de Caja - 2026")
+    st.title("💰 Sistema de Control de Caja - 2026 💰 ")
 
 with col2:
     st.image("data/img/cvp.png", width=210)
@@ -97,52 +135,45 @@ with col2:
 # LOGIN PARA MODO EDICIÓN
 # --------------------------------------------------
 
-if not st.session_state["autenticado"]:
+if st.session_state["rol"] == "lectura":
 
     with st.sidebar:
-        st.subheader("🔐 Modo Edición")
-        password_input = st.text_input(
-            "Ingrese contraseña para editar",
-            type="password"
-        )
+        st.subheader("🔐 Acceso al Sistema")
 
-        if st.button("Ingresar"):
-            if password_input == PASSWORD:
-                st.session_state["autenticado"] = True
+        # 🔹 Guardar filtros actuales
+        filtros_actuales = dict(st.query_params)
 
-                # 🔁 RECONSTRUIR FILTROS DESDE URL
-                columnas_url = st.query_params.get("columnas")
-                if columnas_url:
-                    if isinstance(columnas_url, str):
-                        columnas_url = columnas_url.split(",")
-                    st.session_state["columnas_filtro"] = columnas_url
+        with st.form("login_form"):
 
-                # reconstruir filtros dinámicos
-                for key, value in st.query_params.items():
-                    if key not in ["columnas", "mes", "fecha_inicio", "fecha_fin", "modo"]:
-                        if isinstance(value, str):
-                            st.session_state[f"filtro_{key}"] = [value]
-                        else:
-                            st.session_state[f"filtro_{key}"] = value
+            usuario_input = st.text_input("Usuario", key="login_user")
+            password_input = st.text_input("Contraseña", type="password", key="login_pass")
 
-                # reconstruir mes
-                if "mes" in st.query_params:
-                    st.session_state["mes_seleccionado"] = st.query_params.get("mes")
+            submit = st.form_submit_button("Ingresar")
 
-                st.success("Acceso concedido")
-                st.rerun()
-            else:
-                st.error("Contraseña incorrecta")
+            if submit:
+                if usuario_input in USUARIOS:
+                    if password_input == USUARIOS[usuario_input]["password"]:
 
-modo_lectura = not st.session_state["autenticado"]
+                        # 🔹 GUARDAR FILTROS ANTES DEL LOGIN
+                        st.session_state["filtros_guardados"] = filtros_actuales
+                        st.session_state["rol"] = USUARIOS[usuario_input]["rol"]
+                        st.success("Acceso concedido")
+                        st.rerun()
+                    else:
+                        st.error("Contraseña incorrecta")
+                else:
+                    st.error("Usuario no existe")
 
+modo_lectura = st.session_state["rol"] == "lectura"
+es_admin = st.session_state["rol"] == "admin"
+es_operador = st.session_state["rol"] == "operador"
 
 st.caption("Filtros dinámicos")
 
 # --------------------------------------------------
 # ADMINISTRACIÓN
 # --------------------------------------------------
-if not modo_lectura:
+if es_admin:
     st.sidebar.divider()
     st.sidebar.subheader("⚙️ Administración")
 
@@ -159,16 +190,14 @@ if not modo_lectura:
 
         st.success("Archivos y filtros eliminados correctamente")
         st.rerun()
-
 # --------------------------------------------------
 # CARGA O RECUPERACIÓN DE ARCHIVO
 # --------------------------------------------------
 
-if not modo_lectura:
-    archivo = st.file_uploader("📂 Cargar Excel", type=["xlsx"])
+if es_admin:
+    archivo = st.file_uploader("📂 Cargar/Subir Excel", type=["xlsx"])
 else:
     archivo = None
-
 
 # --------------------------------------------------
 # SI SE CARGA ARCHIVO NUEVO
@@ -223,8 +252,6 @@ if os.path.exists(ruta_excel):
 
     def obtener_parametro(nombre):
         return query_params.get(nombre)
-
-    #st.write("Columnas Ejecutado:", df.columns.tolist())
     # --------------------------------------------------
     # CONFIGURACIÓN DE FILTROS
     # --------------------------------------------------
@@ -385,8 +412,9 @@ if os.path.exists(ruta_excel):
 
         key = f"filtro_{col}"
 
-        # Inicializar desde URL solo una vez
+        # 🔹 Inicializar desde URL SOLO si el filtro no existe aún
         if key not in st.session_state:
+
             valores_url = st.query_params.get(col)
 
             if valores_url:
@@ -408,11 +436,28 @@ if os.path.exists(ruta_excel):
                 st.session_state[key] = valores.copy()
                 st.rerun()
 
+            # Si el filtro no existe en session_state, reconstruir desde URL
+            if key not in st.session_state:
+
+                valores_url = st.query_params.get(col)
+
+                if valores_url:
+                    if isinstance(valores_url, str):
+                        valores_url = [valores_url]
+
+                    st.session_state[key] = [
+                        v for v in valores_url if v in valores
+                    ]
+                else:
+                    st.session_state[key] = []
+
             seleccion_actual = st.sidebar.multiselect(
                 f"{col.replace('_', ' ').title()}",
                 options=valores,
+                default=st.session_state[key],   # 🔥 CLAVE
                 key=key
             )
+
 
         else:
             # 👇 LEER DIRECTAMENTE DESDE URL
@@ -565,17 +610,41 @@ if os.path.exists(ruta_excel):
     })
 
     fig_pie = px.pie(
-    df_ie,
-    names="Tipo",
-    values="Monto",
-    hole=0.5,
-    title="Ingresos vs Egresos",
-    color="Tipo",
-    color_discrete_map={
-        "Ingresos": "#5095B4",   # verde claro
-        "Egresos": "#BE2323"     # rojo claro
-    }
+        df_ie,
+        names="Tipo",
+        values="Monto",
+        hole=0.5,
+        title="Ingresos vs Egresos",
+        color="Tipo",
+        color_discrete_map={
+            "Ingresos": "#5095B4",
+            "Egresos": "#BE2323"
+        }
     )
+
+    # Hacer porcentajes más grandes y visibles
+    fig_pie.update_traces(
+        textinfo="percent",
+        textfont_size=30,          # 🔹 tamaño más grande
+        textposition="inside",     # dentro del gráfico
+        insidetextorientation="radial"
+    )
+
+    fig_pie.update_layout(
+        uniformtext_minsize=15,
+        uniformtext_mode="hide"
+    )
+    fig_pie.update_layout(
+        annotations=[
+            dict(
+                text=f"<b>S/ {saldo:,.0f}</b><br>Saldo",
+                x=0.5, y=0.5,
+                font_size=15,
+                showarrow=False
+            )
+        ]
+    )
+
 
     st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -613,6 +682,13 @@ if os.path.exists(ruta_excel):
         .groupby(columnas_groupby, as_index=False)["total_general_s"]
         .sum()
     )
+    # Formato especial para deuda_pendiente
+    if "deuda_pendiente" in tabla.columns:
+        tabla["deuda_pendiente"] = (
+            pd.to_numeric(tabla["deuda_pendiente"], errors="coerce")
+            .fillna(0)
+            .map(lambda x: f"{x:,.2f}")
+        )
 
     # Ordenar por costo__gasto si existe
     if "costo__gasto" in tabla.columns:
@@ -650,7 +726,7 @@ if os.path.exists(ruta_excel):
     with st.expander("🔍 Ver detalle completo"):
             st.dataframe(df_filtrado, use_container_width=True)
 
-    st.subheader("📈 Visualización de Resultados")
+    st.subheader("📈 Visualización de Gráfico")
 
     # Definir eje X
     if "clasificacion_1" in tabla.columns:
@@ -697,8 +773,6 @@ if os.path.exists(ruta_excel):
             excel_buffer = BytesIO()
 
             with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-
-
                 # Resumen
                 df_resumen = pd.DataFrame({
                     "Concepto": ["Total Ingresos", "Total Egresos", "Saldo"],
@@ -745,7 +819,7 @@ if os.path.exists(ruta_excel):
         #boton
 
         st.divider()
-    st.subheader("📤 Exportar Dashboard")
+    st.subheader("📤 Exportar Excel + Gráficos")
 
     zip_file = exportar_dashboard(
         tabla=tabla,
@@ -759,7 +833,7 @@ if os.path.exists(ruta_excel):
     st.download_button(
         label="📦 Descargar Excel + Gráficos",
         data=zip_file,
-        file_name="control_caja_dashboard.zip",
+        file_name="Control_Caja_Excel.zip",
         mime="application/zip"
     )
 
@@ -771,7 +845,9 @@ if os.path.exists(ruta_excel):
         tabla_resumen,
         fig_pie,
         fig_bar,
-        ultima_fecha
+        ultima_fecha,
+        fecha_inicio,
+        fecha_fin
     ):
         buffer = BytesIO()
 
@@ -788,24 +864,32 @@ if os.path.exists(ruta_excel):
         story = []
 
     # -------------------------------
-    # TÍTULO
+    # TÍTULO DEL PDF
     # -------------------------------
         story.append(Paragraph("<b>REPORTE EJECUTIVO – CONTROL DE CAJA</b>", styles["Title"]))
         story.append(Spacer(1, 12))
 
         fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M")
-        fecha_ultima = ultima_fecha.strftime("%d/%m/%Y")
+
+        fecha_inicio_fmt = pd.to_datetime(fecha_inicio).strftime("%d/%m/%Y")
+        fecha_fin_fmt = pd.to_datetime(fecha_fin).strftime("%d/%m/%Y")
 
         story.append(
             Paragraph(
-                f"Fecha de generación: {fecha_generacion} al {fecha_ultima}",
+                f"<b>Fecha de generación:</b> {fecha_generacion}",
                 styles["Normal"]
             )
         )
 
+        story.append(Spacer(1, 6))
 
+        story.append(
+            Paragraph(
+                f"<b>Rango de Análisis:</b> {fecha_inicio_fmt} al {fecha_fin_fmt}",
+                styles["Normal"]
+            )
+        )
         story.append(Spacer(1, 12))
-
         # -------------------------------
         # KPIs
         # -------------------------------
@@ -837,7 +921,6 @@ if os.path.exists(ruta_excel):
         fig_bar.to_image(format="png", engine="kaleido", scale=2)
         )
 
-
         story.append(Paragraph("<b>Distribución de Ingresos y Egresos</b>", styles["Heading2"]))
         story.append(Spacer(1, 8))
         story.append(Image(pie_img, width=14*cm, height=9*cm))
@@ -849,7 +932,7 @@ if os.path.exists(ruta_excel):
         story.append(Spacer(1, 16))
 
     # -------------------------------
-    # TABLA RESUMEN (MEJORADA)
+    # TABLA RESUMEN
     # -------------------------------
         story.append(Paragraph("<b>Resumen de Resultados</b>", styles["Heading2"]))
         story.append(Spacer(1, 8))
@@ -878,7 +961,7 @@ if os.path.exists(ruta_excel):
 
             fila = []
             for val in row:
-                color = "#BE2323" if es_egreso else "#000000"
+                color = "#BE2323" if es_egreso else "#269161"
                 fila.append(
                     Paragraph(
                         f'<font color="{color}">{val}</font>',
@@ -911,22 +994,19 @@ if os.path.exists(ruta_excel):
         ]))
 
         story.append(tabla_res)
-
-
         # -------------------------------
         doc.build(story)
         buffer.seek(0)
 
         return buffer
 
-    st.subheader("📤 Exportación")
+    st.subheader("📤 Exportar PDF")
 
     tabla_pdf = (
         tabla
         .drop(columns=["total_general_s"])
         .rename(columns={"total_general_s_fmt": "TOTAL"})
     )
-
     ultima_fecha = df_filtrado["fecha"].max()
 
     pdf_buffer = exportar_pdf_ejecutivo(
@@ -936,12 +1016,12 @@ if os.path.exists(ruta_excel):
         tabla_resumen=tabla_pdf,
         fig_pie=fig_pie,
         fig_bar=fig_bar,
-        ultima_fecha=ultima_fecha
+        ultima_fecha=ultima_fecha,
+        fecha_inicio=fechas[0],
+        fecha_fin=fechas[1]
     )
-
-
     st.download_button(
-        "📄 Descargar PDF Ejecutivo",
+        "📄 Descargar PDF",
         data=pdf_buffer,
         file_name="reporte_control_caja.pdf",
         mime="application/pdf"
