@@ -5,7 +5,7 @@ import plotly.io as pio
 import zipfile
 from io import BytesIO
 from datetime import datetime
-
+import streamlit.components.v1 as components
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
@@ -17,6 +17,91 @@ import os
 # --------------------------------------------------
 
 st.set_page_config(page_title="Control de Caja Comparativo", layout="wide")
+
+# --------------------------------------------------
+# CONTROL DE ACCESO MULTIROL
+# --------------------------------------------------
+
+# --------------------------------------------------
+# USUARIOS Y ROLES
+# --------------------------------------------------
+# =====================================================
+# 🔐 SISTEMA DE ROLES (IGUAL AL SISTEMA ANTIGUO)
+# =====================================================
+
+USUARIOS = {
+    "admin": {
+        "password": "finanzas2026.",
+        "rol": "admin"
+    },
+    "operador": {
+        "password": "operador2026.",
+        "rol": "operador"
+    }
+}
+
+# Rol por defecto = lectura
+if "rol" not in st.session_state:
+    st.session_state["rol"] = "lectura"
+
+# --------------------------------------------------
+# DEFINICIÓN DE MODOS
+# --------------------------------------------------
+
+modo_lectura = st.session_state["rol"] == "lectura"
+es_admin = st.session_state["rol"] == "admin"
+es_operador = st.session_state["rol"] == "operador"
+
+# =====================================================
+# 🔐 LOGIN SOLO SI ESTÁ EN LECTURA
+# =====================================================
+
+if st.session_state["rol"] == "lectura":
+
+    with st.sidebar:
+        st.subheader("🔐 Acceso al Sistema")
+
+        filtros_actuales = dict(st.query_params)
+
+        with st.form("login_form"):
+
+            usuario_input = st.text_input("Usuario")
+            password_input = st.text_input("Contraseña", type="password")
+
+            submit = st.form_submit_button("Ingresar")
+
+            if submit:
+                if usuario_input in USUARIOS:
+                    if password_input == USUARIOS[usuario_input]["password"]:
+
+                        # 🔥 GUARDAR FILTROS ACTUALES
+                        st.session_state["filtros_guardados"] = filtros_actuales
+                        st.session_state["rol"] = USUARIOS[usuario_input]["rol"]
+
+                        st.success("Acceso concedido")
+                        st.rerun()
+                    else:
+                        st.error("Contraseña incorrecta")
+                else:
+                    st.error("Usuario no existe")
+
+
+# --------------------------------------------------
+# INFO USUARIO
+# --------------------------------------------------
+
+if st.session_state["rol"] != "lectura":
+
+    st.sidebar.success(f"👤 Rol: {st.session_state['rol']}")
+
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state["rol"] = "lectura"
+        st.rerun()
+
+else:
+    st.sidebar.info("🔒 Vista en modo lectura")
+
+
 
 # --------------------------------------------------
 # CREAR CARPETA DATA SI NO EXISTE
@@ -81,31 +166,38 @@ ruta_pr = "data/proyectado.xlsx"
 st.sidebar.divider()
 st.sidebar.subheader("⚙️ Administración")
 
-if st.sidebar.button("🗑️ Limpiar archivos guardados"):
+if st.session_state["rol"] == "admin":
+    if st.sidebar.button("🗑️ Limpiar archivos guardados"):
 
-    # 🔹 Eliminar archivos
-    if os.path.exists(ruta_ej):
-        os.remove(ruta_ej)
+        # 🔹 Eliminar archivos
+        if os.path.exists(ruta_ej):
+            os.remove(ruta_ej)
 
-    if os.path.exists(ruta_pr):
-        os.remove(ruta_pr)
+        if os.path.exists(ruta_pr):
+            os.remove(ruta_pr)
 
-    # 🔹 Limpiar session_state completo
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+        # 🔹 Limpiar session_state completo
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
 
-    # 🔹 Limpiar parámetros de la URL
-    st.query_params.clear()
+        # 🔹 Limpiar parámetros de la URL
+        st.query_params.clear()
 
-    st.success("Archivos y filtros eliminados correctamente")
+        st.success("Archivos y filtros eliminados correctamente")
 
-    st.rerun()
+        st.rerun()
 
 
 col1, col2 = st.columns(2)
 
 with col1:
-    archivo_ej = st.file_uploader("📂 Cargar Excel Ejecutado", type=["xlsx"])
+    archivo_ej = st.file_uploader(
+        "📂 Cargar Excel Ejecutado",
+        type=["xlsx"],
+        disabled=not es_admin
+        )
+
+
 
     if archivo_ej:
         with open(ruta_ej, "wb") as f:
@@ -113,8 +205,9 @@ with col1:
         st.success("Ejecutado guardado correctamente")
 
 with col2:
-    archivo_pr = st.file_uploader("📂 Cargar Excel Proyectado", type=["xlsx"])
-
+    archivo_pr = st.file_uploader("📂 Cargar Excel Proyectado", type=["xlsx"],
+        disabled=not es_admin
+    )
     if archivo_pr:
         with open(ruta_pr, "wb") as f:
             f.write(archivo_pr.getbuffer())
@@ -145,18 +238,44 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
 
     query_params = st.query_params
 
-    
+    # =====================================================
+    # 🔁 RESTAURAR FILTROS DESPUÉS DEL LOGIN
+    # =====================================================
+
+    if "filtros_guardados" in st.session_state:
+
+        filtros = st.session_state["filtros_guardados"]
+
+        for k, v in filtros.items():
+            st.query_params[k] = v
+
+            if k != "columnas":
+                if isinstance(v, str):
+                    v = [v]
+
+                st.session_state[f"filtro_{k}"] = v
+
+        
+
+        if "columnas" in filtros:
+            columnas = filtros["columnas"]
+
+            if isinstance(columnas, str):
+                columnas = columnas.split(",")
+
+            st.session_state["columnas_filtro"] = columnas
+
+        del st.session_state["filtros_guardados"]
+
     def guardar_parametro(nombre, valor):
 
-        # Si está vacío o es "Todos", eliminar de URL
         if not valor or valor == "Todos" or valor == ["Todos"]:
             if nombre in st.query_params:
                 del st.query_params[nombre]
             return
 
-        # Si es lista, convertir correctamente
         if isinstance(valor, list):
-            st.query_params[nombre] = valor
+            st.query_params[nombre] = ",".join(map(str, valor))
         else:
             st.query_params[nombre] = str(valor)
 
@@ -164,7 +283,8 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     def obtener_parametro(nombre):
         return query_params.get(nombre)
 
-    
+    if obtener_parametro("view") == "1":
+        st.session_state["rol"] = "lectura"
     # --------------------------------------------------
     # CONFIGURACIÓN DE FILTROS
     # --------------------------------------------------
@@ -199,7 +319,8 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     columnas_filtro = st.sidebar.multiselect(
         "Selecciona columnas para filtrar",
         columnas_disponibles,
-        key="columnas_filtro"
+        key="columnas_filtro",
+        disabled=modo_lectura
     )
 
 
@@ -249,40 +370,42 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         key=lambda x: list(meses_es.values()).index(x)
     )
     mes_url = obtener_parametro("mes")
-    if mes_url:
-        mes_seleccionado = mes_url
 
-    mes_anterior = st.session_state.get("mes_anterior", None)
+    opciones_mes = ["Todos"] + meses_disponibles
+
+    if mes_url in opciones_mes:
+        index_mes = opciones_mes.index(mes_url)
+    else:
+        index_mes = 0
 
     mes_seleccionado = st.sidebar.selectbox(
         "Seleccionar mes",
-        options=["Todos"] + meses_disponibles,
-        disabled=modo_ejecutivo,
+        options=opciones_mes,
+        index=index_mes,
+        disabled=modo_lectura,
         key="mes_selector"
     )
 
+    if not modo_lectura:
+        guardar_parametro("mes", mes_seleccionado)
+
+
     # Detectar cambio de mes
-    if mes_seleccionado != mes_anterior:
+    if mes_seleccionado != "Todos" and not modo_lectura:
 
-        st.session_state["mes_anterior"] = mes_seleccionado
+        df_mes_temp = df[df["mes_nombre"] == mes_seleccionado]
 
-        if mes_seleccionado != "Todos":
+        if not df_mes_temp.empty:
 
-            df_mes_temp = df[df["mes_nombre"] == mes_seleccionado]
+            nueva_fecha_inicio = df_mes_temp["fecha"].min().date()
+            nueva_fecha_fin = df_mes_temp["fecha"].max().date()
 
-            if not df_mes_temp.empty:
-                nueva_fecha_inicio = df_mes_temp["fecha"].min().date()
-                nueva_fecha_fin = df_mes_temp["fecha"].max().date()
+            guardar_parametro("fecha_inicio", nueva_fecha_inicio)
+            guardar_parametro("fecha_fin", nueva_fecha_fin)
 
-                st.query_params["fecha_inicio"] = str(nueva_fecha_inicio)
-                st.query_params["fecha_fin"] = str(nueva_fecha_fin)
-
-        else:
-            if "fecha_inicio" in st.query_params:
-                del st.query_params["fecha_inicio"]
-            if "fecha_fin" in st.query_params:
-                del st.query_params["fecha_fin"]
-
+    # 🔥 IMPORTANTE:
+    # Si es "Todos" NO borramos fecha_inicio ni fecha_fin
+    # Dejamos que el date_input controle eso
 
     if mes_seleccionado != "Todos":
         df_filtrado = df_filtrado[
@@ -303,9 +426,6 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         key = f"filtro_{col}"
         opciones = ["Todos"] + list(valores)
 
-        if key not in st.session_state:
-            st.session_state[key] = []
-
         def actualizar_columnas():
             st.session_state.columnas_visibles = st.session_state.columnas_selector
 
@@ -319,38 +439,31 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
                 st.session_state[key] = list(valores)
 
 
-        # Recuperar desde URL
         # Recuperar desde URL SOLO la primera vez
-        valor_url = obtener_parametro(col)
-
         if key not in st.session_state:
+
+            valor_url = obtener_parametro(col)
 
             if valor_url:
                 if isinstance(valor_url, str):
-                    valor_url = [valor_url]
+                    valor_url = valor_url.split(",")
+
                 st.session_state[key] = valor_url
-            else:
-                st.session_state[key] = []
 
 
         seleccion = st.sidebar.multiselect(
             f"{col.replace('_', ' ').title()}",
             options=opciones,
             key=key,
-            disabled=modo_ejecutivo,
+            disabled=modo_lectura,
             on_change=on_change_callback
         )
 
 
-        guardar_parametro(col, seleccion)
+        if not modo_lectura:
+            guardar_parametro(col, seleccion)
 
-        if mes_seleccionado != "Todos":
-            guardar_parametro("mes", mes_seleccionado)
-        else:
-            if "mes" in st.query_params:
-                del st.query_params["mes"]
-
-
+    
         # Aplicar filtro
         valores_seleccionados = st.session_state[key]
 
@@ -406,13 +519,14 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
                 value=fechas_default,
                 min_value=min_date,
                 max_value=max_date,
-                disabled=modo_ejecutivo
+                disabled=modo_lectura
             )
 
             if len(fechas) == 2:
 
-                guardar_parametro("fecha_inicio", str(fechas[0]))
-                guardar_parametro("fecha_fin", str(fechas[1]))
+                if not modo_lectura:
+                    guardar_parametro("fecha_inicio", str(fechas[0]))
+                    guardar_parametro("fecha_fin", str(fechas[1]))
 
                 df_filtrado = df_filtrado[
                     (df_filtrado["fecha"] >= pd.to_datetime(fechas[0])) &
@@ -436,49 +550,48 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         modo_opciones,
         index=modo_opciones.index(modo_url)
         if modo_url in modo_opciones else 0,
-        disabled=modo_ejecutivo
+            disabled=modo_lectura
     )
 
 
-    guardar_parametro("modo", modo)
+    if not modo_lectura:
+        guardar_parametro("modo", modo)
 
     # --------------------------------------------------
     # GENERAR LINK COMPARTIBLE
     # --------------------------------------------------
 
-    from urllib.parse import urlencode
+    # --------------------------------------------------
+    # LINK COMPARTIBLE REAL (FUNCIONA EN CLOUD)
+    # --------------------------------------------------
+
+    #if not params_lectura:
 
     st.sidebar.divider()
-    st.sidebar.subheader("🔗 Compartir vista")
+    st.sidebar.subheader("🔗 Compartir vistas")
 
-    params = {}
-
-    for k, v in st.query_params.items():
-        if isinstance(v, list):
-            params[k] = v
-        else:
-            params[k] = v
-
-    query_string = urlencode(params, doseq=True)
-
-    url_actual = f"?{query_string}" if query_string else ""
-
-    st.sidebar.text_input(
-        "📎 Link con filtros aplicados",
-        value=url_actual
+    components.html(
+        """
+        <script>
+        const url = window.parent.location.href;
+        const container = window.parent.document.querySelector('section.main');
+        </script>
+        """,
+        height=0,
     )
 
-    if not modo_ejecutivo:
-        params_ejecutivo = params.copy()
-        params_ejecutivo["ejecutivo"] = "1"
-
-        query_ejecutivo = urlencode(params_ejecutivo, doseq=True)
-        url_ejecutivo = f"?{query_ejecutivo}"
-
-        st.sidebar.text_input(
-            "🔒 Link Vista Ejecutiva (bloqueado)",
-            value=url_ejecutivo
-        )
+    st.sidebar.markdown(
+        """
+        <a href="" onclick="
+        const url = new URL(window.location.href);
+        url.searchParams.set('view','1');
+        navigator.clipboard.writeText(url.toString());
+        return false;">
+            📋 Copiar URL modo lectura
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
 
 
     columnas_grupo = columnas_filtro.copy()
@@ -513,7 +626,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     col1.metric("💵 Ejecutado", formato_moneda(total_ej))
     col2.metric("📊 Proyectado", formato_moneda(total_pr))
     col3.metric("📉 Diferencia", formato_moneda(diferencia))
-    col4.metric("📈 % CUMP.", f"{cumplimiento:,.2f}%")
+    col4.metric("📈 % Cumplimiento.", f"{cumplimiento:,.2f}%")
 
     # --------------------------------------------------
     # INGRESOS VS EGRESOS
@@ -571,7 +684,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
 
     tabla["Diferencia"] = tabla["Ejecutado"] - tabla["Proyectado"]
 
-    tabla["% CUMP."] = tabla.apply(
+    tabla["% Cumplimiento"] = tabla.apply(
         lambda row: (row["Ejecutado"] / row["Proyectado"] * 100)
         if row["Proyectado"] != 0 else 0,
         axis=1
@@ -598,36 +711,273 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
             "Ejecutado": lambda x: f"S/. {x:,.2f}" if pd.notnull(x) else "",
             "Proyectado": lambda x: f"S/. {x:,.2f}" if pd.notnull(x) else "",
             "Diferencia": lambda x: f"S/. {x:,.2f}" if pd.notnull(x) else "",
-            "% CUMP.": lambda x: f"{x:,.2f} %" if pd.notnull(x) else ""
+            "% Cumplimiento": lambda x: f"{x:,.2f} %" if pd.notnull(x) else ""
         })
         .applymap(color_diferencia, subset=["Diferencia"]),
         use_container_width=True
     )
 
+    # ----------------------------------------
+    # Selector dinámico de dimensión
+    # ----------------------------------------
+
+    # ----------------------------------------
+    # Selector dinámico de dimensión (CON URL)
+    # ----------------------------------------
+
+    columnas_posibles = [
+        col for col in df_filtrado.columns
+        if col not in ["total_general_s", "tipo_archivo"]
+    ]
+
+    key_agrupar = "agrupar_por"
+
+    # 🔹 Restaurar desde URL solo la primera vez
+    if key_agrupar not in st.session_state:
+
+        valor_url = obtener_parametro(key_agrupar)
+
+        if valor_url and valor_url in columnas_posibles:
+            st.session_state[key_agrupar] = valor_url
+        else:
+            st.session_state[key_agrupar] = columnas_posibles[0]
+
     # --------------------------------------------------
-    # GRÁFICO COMPARATIVO
-    # --------------------------------------------------
+        # DETALLE
+        # --------------------------------------------------
+    with st.expander("🔍 Ver detalle completo"):
+            st.dataframe(df_filtrado, use_container_width=True)
 
-    #if modo != "Sin comparación":
+    st.subheader("📈 Visualización de Gráfico")
 
-    eje = "fecha" if modo=="Por día" else "anio_mes"
+    # Definir eje X
+    if "clasificacion_1" in tabla.columns:
+        eje_x = "clasificacion_1"
+    else:
+        eje_x = columnas_grupo[0]
 
-    graf = (
-        df_filtrado
-        .groupby([eje,"tipo_archivo"], as_index=False)["total_general_s"]
-        .sum()
+    #fig_bar = px.bar(
+    #    tabla,
+    #    x=eje_x,
+    #    y="total_general_s",
+    #    text_auto=".2s",
+    #    labels={
+    #        "total_general_s": "Total S/"
+    #    },
+    #    title="Total por Clasificación"
+    #)
+
+    # 👉 Personalizar el hover (tooltip)
+     #fig_bar.update_traces(
+     #    hovertemplate=
+     #        "<b>%{x}</b><br>" +
+      #       "Total: S/ %{y:,.2f}" +
+       #      "<extra></extra>"
+  #   )
+
+   #  fig_bar.update_layout(
+    #     xaxis_title=None,
+    #     height=500
+   #  )
+
+   #  st.plotly_chart(fig_bar, use_container_width=True)
+
+    columna_descripcion = st.selectbox(
+        "Agrupar gráfico por:",
+        columnas_posibles,
+        key=key_agrupar,
+        disabled=modo_lectura
     )
 
-    fig_bar = px.bar(
-        graf,
-        x=eje,
-        y="total_general_s",
-        color="tipo_archivo",
-        barmode="group",
-        title="Comparación Ejecutado vs Proyectado"
-    )
+    # 🔹 Guardar en URL solo si NO está en modo lectura
+    if not modo_lectura:
+        guardar_parametro(key_agrupar, columna_descripcion)
+    
+    # --------------------------------------------------
+    # GRÁFICO EJECUTIVO PROFESIONAL
+    # --------------------------------------------------
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.subheader("📊 FC Ejecutado vs FC Presupuesto")
 
+    # ----------------------------------------
+    # Definir columna descripción dinámica
+    # ----------------------------------------
+
+    if columna_descripcion:
+
+        # ----------------------------------------
+        # Agrupar datos
+        # ----------------------------------------
+
+        graf_base = (
+            df_filtrado
+            .groupby([columna_descripcion, "tipo_archivo"], as_index=False)["total_general_s"]
+            .sum()
+        )
+
+        graf_pivot = graf_base.pivot_table(
+            index=columna_descripcion,
+            columns="tipo_archivo",
+            values="total_general_s",
+            fill_value=0
+        ).reset_index()
+
+        # Asegurar columnas
+        if "Ejecutado" not in graf_pivot.columns:
+            graf_pivot["Ejecutado"] = 0
+
+        if "Proyectado" not in graf_pivot.columns:
+            graf_pivot["Proyectado"] = 0
+
+        # ----------------------------------------
+        # Métricas adicionales
+        # ----------------------------------------
+
+        graf_pivot["Diferencia"] = graf_pivot["Ejecutado"] - graf_pivot["Proyectado"]
+
+        graf_pivot["% Cumplimiento"] = graf_pivot.apply(
+            lambda row: (row["Ejecutado"] / row["Proyectado"] * 100)
+            if row["Proyectado"] != 0 else 0,
+            axis=1
+        )
+
+        # ----------------------------------------
+        # Ordenar de mayor a menor impacto
+        # ----------------------------------------
+
+        graf_pivot = graf_pivot.sort_values(
+            by="Ejecutado",
+            ascending=False
+        )
+
+        # ----------------------------------------
+        # Crear gráfico
+        # ----------------------------------------
+
+        import plotly.graph_objects as go
+
+        fig = go.Figure()
+
+        # ----------------------------------------
+        # BARRA REAL
+        # ----------------------------------------
+
+        fig.add_trace(go.Bar(
+            x=graf_pivot[columna_descripcion],
+            y=graf_pivot["Ejecutado"].apply(lambda x: abs(x) if x != 0 else 0.0001),
+            name="FC REAL",
+            marker_color="#1F4E79",
+            width=0.25,
+            offsetgroup="1",
+            text=[f"S/ {v:,.0f}" for v in graf_pivot["Ejecutado"]],
+            texttemplate="%{text}",
+            textposition="outside",
+            textangle=90,
+            constraintext="none",
+            textfont=dict(
+                size=16,
+                color="#1F4E79",
+                family="Arial Black"
+            ),
+            cliponaxis=False
+        ))
+
+        # ----------------------------------------
+        # BARRA PRESUPUESTO
+        # ----------------------------------------
+
+        fig.add_trace(go.Bar(
+            x=graf_pivot[columna_descripcion],
+            y=graf_pivot["Proyectado"].apply(lambda x: abs(x) if x != 0 else 0.0001),
+            name="PRESUPUESTO",
+            marker_color="#ED7D31",
+            width=0.25,
+            offsetgroup="2",
+            text=[f"S/ {v:,.0f}" for v in graf_pivot["Proyectado"]],
+            texttemplate="%{text}",
+            textposition="outside",
+            textangle=90,
+            constraintext="none",
+            textfont=dict(
+                size=13,
+                color="#ED7D31",
+                family="Arial Black"
+            ),
+            cliponaxis=False
+        ))
+        
+        fig.add_trace(go.Bar(
+            x=graf_pivot[columna_descripcion],
+            y=graf_pivot["% Cumplimiento"].apply(lambda x: x if x != 0 else 0.0001),
+            name="% Cumplimiento",
+            marker_color="#70AD47",
+            width=0.25,
+            offsetgroup="3",
+            text=[f"{v:.0f}%" for v in graf_pivot["% Cumplimiento"]],
+            texttemplate="%{text}",
+            textposition="outside",
+            textangle=90,
+            textfont=dict(
+                size=13,
+                color="#2E7D32",
+                family="Arial Black"
+            ),
+            cliponaxis=False
+        ))
+
+
+        # ----------------------------------------
+        # Layout ejecutivo
+        # ----------------------------------------
+
+        fig.update_layout(
+            barmode="group",
+            title=dict(
+                text="FC Ejecutado vs FC Presupuesto",
+                x=0.5,
+                xanchor="center",
+                font=dict(size=20)
+            ),
+            xaxis_title="",
+            yaxis_title="Monto (S/)",
+            yaxis2=dict(
+                title="% Cumplimiento",
+                overlaying="y",
+                side="right",
+                showgrid=False,
+                showticklabels=False,   # 🔥 quita 0,100,200
+                zeroline=False,         # 🔥 quita línea base
+                #range=[0, 120],   # 🔥 rango fijo
+                #range=[0, max(120, graf_pivot["% Cumplimiento"].max() * 1.2)],
+                range=[0, max(130, graf_pivot["% Cumplimiento"].max() * 1.25)],
+                tickformat=".0f"
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.05,
+                xanchor="center",
+                x=0.5
+            ),
+            xaxis=dict(
+                tickangle=-25
+            ),
+            template="plotly_white",
+            height=650
+        )
+
+        max_y = graf_pivot[["Ejecutado","Proyectado"]].abs().max().max()
+
+        fig.update_layout(
+            yaxis=dict(
+                range=[0, max_y * 1.35],
+                showgrid=False,        # 🔥 quita líneas horizontales
+                showticklabels=False,  # 🔥 quita 0, 1M, 2M
+                zeroline=False         # 🔥 quita línea en cero
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+        
 else:
     st.info("👆 Carga ambos archivos para comenzar el análisis comparativo")
