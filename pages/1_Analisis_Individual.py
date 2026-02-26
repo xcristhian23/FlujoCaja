@@ -291,6 +291,7 @@ if os.path.exists(ruta_excel):
         columnas_filtro = st.sidebar.multiselect(
             "Selecciona columnas para filtrar",
             columnas_disponibles,
+            default=st.session_state.get("columnas_filtro", []),
             key="columnas_filtro"
         )
     else:
@@ -412,20 +413,14 @@ if os.path.exists(ruta_excel):
 
         key = f"filtro_{col}"
 
-        # 🔹 Inicializar desde URL SOLO si el filtro no existe aún
-        if key not in st.session_state:
-
-            valores_url = st.query_params.get(col)
-
-            if valores_url:
-                if isinstance(valores_url, str):
-                    valores_url = [valores_url]
-
-                st.session_state[key] = [
-                    v for v in valores_url if v in valores
-                ]
-            else:
-                st.session_state[key] = []
+        # LEER filtros desde URL
+        valores_url = st.query_params.get(col)
+        if valores_url:
+            if isinstance(valores_url, str):
+                valores_url = valores_url.split(",")  # 🔹 separar múltiples valores
+            seleccion_actual = [v for v in valores_url if v in valores]
+        else:
+            seleccion_actual = []
 
         # -----------------------------
         # Botón seleccionar todos
@@ -453,29 +448,27 @@ if os.path.exists(ruta_excel):
 
             seleccion_actual = st.sidebar.multiselect(
                 f"{col.replace('_', ' ').title()}",
-                options=valores,
-                default=st.session_state[key],   # 🔥 CLAVE
+                options=sorted(df_filtrado[col].dropna().astype(str).unique()),  # todos los valores posibles
+                default=st.session_state[key],  # solo los seleccionados
                 key=key
             )
 
 
-        else:
-            # 👇 LEER DIRECTAMENTE DESDE URL
+        if modo_lectura:
             valores_url = st.query_params.get(col)
-
             if valores_url:
                 if isinstance(valores_url, str):
-                    valores_url = [valores_url]
-
-                seleccion_actual = [
-                    v for v in valores_url if v in valores
-                ]
+                    valores_url = valores_url.split(",")  # 🔹 separar varios valores
+                seleccion_actual = [v for v in valores_url if v in valores]
             else:
                 seleccion_actual = []
 
-        # Guardar en URL
+            # Mostrar los filtros en la barra lateral (solo lectura)
+            st.sidebar.markdown(f"**{col.replace('_',' ').title()}:** {', '.join(seleccion_actual) if seleccion_actual else 'Todos'}")
+
+        # Guardar solo los valores seleccionados en URL
         if seleccion_actual:
-            st.query_params[col] = seleccion_actual
+            st.query_params[col] = ",".join(seleccion_actual)  # 🔹 join para multi-selección
         else:
             if col in st.query_params:
                 del st.query_params[col]
@@ -726,36 +719,51 @@ if os.path.exists(ruta_excel):
     with st.expander("🔍 Ver detalle completo"):
             st.dataframe(df_filtrado, use_container_width=True)
 
+    # --------------------------------------------------
+    # 📈 Visualización de Gráfico por columna seleccionada
+    # --------------------------------------------------
     st.subheader("📈 Visualización de Gráfico")
 
-    # Definir eje X
-    if "clasificacion_1" in tabla.columns:
-        eje_x = "clasificacion_1"
+    # Selector para eje X del gráfico
+    columnas_posibles = [c for c in tabla.columns if c not in ["total_general_s", "total_general_s_fmt"]]
+    if columnas_posibles:
+        eje_x = st.selectbox(
+            "Agrupar gráfico por:",
+            options=columnas_posibles,
+            index=columnas_posibles.index("clasificacion_1") if "clasificacion_1" in columnas_posibles else 0
+        )
     else:
-        eje_x = columnas_grupo[0]
+        eje_x = "fecha"  # fallback
 
+    # Agrupar tabla filtrada por columna seleccionada + ingreso/egreso
+    graf_pivot = df_filtrado.groupby([eje_x, "ingresoegreso"], as_index=False)["total_general_s"].sum()
+
+    # Crear gráfico de barras agrupadas (Ingresos / Egresos)
     fig_bar = px.bar(
-        tabla,
+        graf_pivot,
         x=eje_x,
         y="total_general_s",
-        text_auto=".2s",
-        labels={
-            "total_general_s": "Total S/"
-        },
-        title="Total por Clasificación"
+        color="ingresoegreso",
+        text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
+        labels={"total_general_s": "Total S/"},
+        color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
+        title="Total por " + eje_x.replace("_", " ").title()
     )
 
-    # 👉 Personalizar el hover (tooltip)
+    # Mostrar valores dentro de la barra
     fig_bar.update_traces(
-        hovertemplate=
-            "<b>%{x}</b><br>" +
-            "Total: S/ %{y:,.2f}" +
-            "<extra></extra>"
+        textposition="outside",
+        textfont_size=14
     )
 
+    # Ajustes generales
     fig_bar.update_layout(
         xaxis_title=None,
-        height=500
+        yaxis_title="Total S/",
+        barmode="group",
+        height=700,
+        uniformtext_minsize=12,
+        uniformtext_mode="hide"
     )
 
     st.plotly_chart(fig_bar, use_container_width=True)
