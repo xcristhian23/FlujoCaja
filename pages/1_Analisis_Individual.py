@@ -724,16 +724,34 @@ if os.path.exists(ruta_excel):
     # --------------------------------------------------
     st.subheader("📈 Visualización de Gráfico")
 
-    # Selector para eje X del gráfico
-    columnas_posibles = [c for c in tabla.columns if c not in ["total_general_s", "total_general_s_fmt"]]
-    if columnas_posibles:
-        eje_x = st.selectbox(
-            "Agrupar gráfico por:",
-            options=columnas_posibles,
-            index=columnas_posibles.index("clasificacion_1") if "clasificacion_1" in columnas_posibles else 0
-        )
-    else:
-        eje_x = "fecha"  # fallback
+    columnas_posibles = [
+        c for c in tabla.columns
+        if c not in ["total_general_s", "total_general_s_fmt"]
+    ]
+
+    param_agrupacion = st.query_params.get("agrupacion")
+
+    # Valor inicial
+    if "agrupacion" not in st.session_state:
+        if param_agrupacion and param_agrupacion in columnas_posibles:
+            st.session_state.agrupacion = param_agrupacion
+        elif "clasificacion_1" in columnas_posibles:
+            st.session_state.agrupacion = "clasificacion_1"
+        else:
+            st.session_state.agrupacion = columnas_posibles[0]
+
+    # Mostrar selectbox
+    eje_x = st.selectbox(
+        "Agrupar gráfico por:",
+        options=columnas_posibles,
+        key="agrupacion",
+        disabled=modo_lectura
+    )
+
+    # 🔹 Solo actualizar URL si cambió y NO está en modo lectura
+    if not modo_lectura:
+        if st.query_params.get("agrupacion") != eje_x:
+            st.query_params["agrupacion"] = eje_x
 
     # Agrupar tabla filtrada por columna seleccionada + ingreso/egreso
     graf_pivot = df_filtrado.groupby([eje_x, "ingresoegreso"], as_index=False)["total_general_s"].sum()
