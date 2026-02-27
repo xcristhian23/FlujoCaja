@@ -446,10 +446,25 @@ if os.path.exists(ruta_excel):
                 else:
                     st.session_state[key] = []
 
+            opciones_validas = sorted(
+                df_filtrado[col].dropna().astype(str).unique()
+            )
+
+            # 🔥 Limpiar valores inválidos del session_state
+            valores_guardados = st.session_state.get(key, [])
+
+            valores_limpios = [
+                v for v in valores_guardados
+                if v in opciones_validas
+            ]
+
+            # Actualizar session_state si hubo limpieza
+            st.session_state[key] = valores_limpios
+
             seleccion_actual = st.sidebar.multiselect(
                 f"{col.replace('_', ' ').title()}",
-                options=sorted(df_filtrado[col].dropna().astype(str).unique()),  # todos los valores posibles
-                default=st.session_state[key],  # solo los seleccionados
+                options=opciones_validas,
+                default=valores_limpios,
                 key=key
             )
 
@@ -648,9 +663,22 @@ if os.path.exists(ruta_excel):
 
     columnas_grupo = columnas_filtro.copy()
 
-    # 🔹 Agregar mes si está seleccionado
-    if mes_seleccionado != "Todos":
-        columnas_grupo.append("mes_nombre")
+    # ------------------------------------------
+    # 🔹 AGREGAR MES SI:
+    # 1) Se seleccionó un mes específico
+    # 2) O el rango de fechas cubre más de un mes
+    # ------------------------------------------
+
+    fecha_inicio = pd.to_datetime(fechas[0])
+    fecha_fin = pd.to_datetime(fechas[1])
+
+    meses_en_rango = df_filtrado["mes_nombre"].nunique()
+
+    if mes_seleccionado != "Todos" or meses_en_rango > 1:
+        if "mes_nombre" not in columnas_grupo:
+            columnas_grupo.append("mes_nombre")
+
+    # ------------------------------------------
 
     if modo == "Por día":
         columnas_grupo.append("fecha")
@@ -740,33 +768,78 @@ if os.path.exists(ruta_excel):
         else:
             st.session_state.agrupacion = columnas_posibles[0]
 
-    # Mostrar selectbox
-    eje_x = st.selectbox(
-        "Agrupar gráfico por:",
+    # Valor inicial
+    if "agrupacion_multi" not in st.session_state:
+
+        param_agrupacion = st.query_params.get("agrupacion")
+
+        if param_agrupacion:
+            if isinstance(param_agrupacion, str):
+                param_agrupacion = [param_agrupacion]
+
+            st.session_state["agrupacion_multi"] = [
+                c for c in param_agrupacion if c in columnas_posibles
+            ]
+        else:
+            if "clasificacion_1" in columnas_posibles:
+                st.session_state["agrupacion_multi"] = ["clasificacion_1"]
+            else:
+                st.session_state["agrupacion_multi"] = [columnas_posibles[0]]
+
+    ejes_x = st.multiselect(
+        "Agrupar gráfico por (máx. 2 columnas):",
         options=columnas_posibles,
-        key="agrupacion",
+        default=st.session_state["agrupacion_multi"],
+        max_selections=2,
+        key="agrupacion_multi",
         disabled=modo_lectura
     )
 
-    # 🔹 Solo actualizar URL si cambió y NO está en modo lectura
+    if not ejes_x:
+        st.warning("Selecciona al menos una columna para el gráfico.")
+        st.stop()
+
+    # Guardar en URL
     if not modo_lectura:
-        if st.query_params.get("agrupacion") != eje_x:
-            st.query_params["agrupacion"] = eje_x
+        st.query_params["agrupacion"] = ",".join(ejes_x)
+
 
     # Agrupar tabla filtrada por columna seleccionada + ingreso/egreso
-    graf_pivot = df_filtrado.groupby([eje_x, "ingresoegreso"], as_index=False)["total_general_s"].sum()
+    graf_pivot = (
+        df_filtrado
+        .groupby(ejes_x + ["ingresoegreso"], as_index=False)["total_general_s"]
+        .sum()
+    )
 
     # Crear gráfico de barras agrupadas (Ingresos / Egresos)
-    fig_bar = px.bar(
-        graf_pivot,
-        x=eje_x,
-        y="total_general_s",
-        color="ingresoegreso",
-        text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
-        labels={"total_general_s": "Total S/"},
-        color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
-        title="Total por " + eje_x.replace("_", " ").title()
-    )
+    # Si solo selecciona 1 columna
+    if len(ejes_x) == 1:
+
+        fig_bar = px.bar(
+            graf_pivot,
+            x=ejes_x[0],
+            y="total_general_s",
+            color="ingresoegreso",
+            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
+            labels={"total_general_s": "Total S/"},
+            color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
+            title="Total por " + ejes_x[0].replace("_", " ").title()
+        )
+
+    # Si selecciona 2 columnas
+    else:
+
+        fig_bar = px.bar(
+            graf_pivot,
+            x=ejes_x[0],
+            y="total_general_s",
+            color="ingresoegreso",
+            facet_col=ejes_x[1],
+            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
+            labels={"total_general_s": "Total S/"},
+            color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
+            title="Total por " + " + ".join(ejes_x).replace("_", " ").title()
+        )
 
     # Mostrar valores dentro de la barra
     fig_bar.update_traces(
