@@ -50,7 +50,15 @@ if "filtros_guardados" in st.session_state:
     filtros = st.session_state["filtros_guardados"]
 
     for k, v in filtros.items():
-        st.query_params[k] = v
+
+        if isinstance(v, list):
+            st.query_params[k] = ",".join(v)
+        else:
+            st.query_params[k] = str(v)
+
+        # reconstruir session_state
+        if k != "columnas":
+            st.session_state[f"filtro_{k}"] = v if isinstance(v, list) else [v]
 
         if k != "columnas":
             if isinstance(v, str):
@@ -141,7 +149,17 @@ if st.session_state["rol"] == "lectura":
         st.subheader("🔐 Acceso al Sistema")
 
         # 🔹 Guardar filtros actuales
-        filtros_actuales = dict(st.query_params)
+        filtros_actuales = {}
+
+        for k, v in st.query_params.items():
+            if isinstance(v, list):
+                filtros_actuales[k] = v.copy()
+            else:
+                # Si viene como string separado por coma
+                if "," in str(v):
+                    filtros_actuales[k] = str(v).split(",")
+                else:
+                    filtros_actuales[k] = [v]
 
         with st.form("login_form"):
 
@@ -218,6 +236,15 @@ if archivo is not None and not st.session_state.get("archivo_guardado", False):
 if os.path.exists(ruta_excel):
 
     df = cargar_excel(ruta_excel)
+
+    # 🔥 Limpiar filtros SOLO si se cargó archivo nuevo
+    if st.session_state.get("archivo_guardado", False) and not st.session_state.get("filtros_reseteados", False):
+
+        for key in list(st.session_state.keys()):
+            if key.startswith("filtro_"):
+                del st.session_state[key]
+
+        st.session_state["filtros_reseteados"] = True
 
     if not st.session_state.get("mensaje_mostrado", False):
         st.success(f"✅ {len(df)} registros cargados")
