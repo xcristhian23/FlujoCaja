@@ -30,7 +30,7 @@ st.set_page_config(page_title="Control de Caja 2026", layout="wide")
 
 USUARIOS = {
     "admin": {
-        "password": "finanzas2026.",
+        "password": "fin2026.",
         "rol": "admin"
     },
     "operador": {
@@ -90,7 +90,7 @@ from urllib.parse import urlencode
 if not os.path.exists("data"):
     os.makedirs("data")
 
-ruta_excel = "data/control_caja.xlsx"
+ruta_excel = "data/control_cajaEje.xlsx"
 
 # --------------------------------------------------
 # Utilidades
@@ -838,52 +838,123 @@ if os.path.exists(ruta_excel):
         .sum()
     )
 
-    # Crear gráfico de barras agrupadas (Ingresos / Egresos)
-    # Si solo selecciona 1 columna
+    cantidad_barras = graf_pivot.shape[0]
+    # --------------------------------------------------
+    # ANCHO DINÁMICO DE BARRAS
+    # --------------------------------------------------
+
+    if cantidad_barras <= 5:
+        ancho_barra = 0.8
+    elif cantidad_barras <= 10:
+        ancho_barra = 0.4
+    elif cantidad_barras <= 13:
+        ancho_barra = 0.4
+    elif cantidad_barras <= 20:
+        ancho_barra = 0.3
+    else:
+        ancho_barra = 0.1
+    # --------------------------------------------------
+    # GRÁFICO DINÁMICO SEGURO (1 o 2 columnas)
+    # --------------------------------------------------
+
     if len(ejes_x) == 1:
 
+        columna_x = ejes_x[0]
+
+        # Si es clasificación → colorear por esa columna
+        if columna_x in graf_pivot.columns:
+            color_col = columna_x
+        else:
+            color_col = "ingresoegreso"
+
         fig_bar = px.bar(
             graf_pivot,
-            x=ejes_x[0],
+            x=columna_x,
             y="total_general_s",
-            color="ingresoegreso",
+            color=color_col,
             text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
             labels={"total_general_s": "Total S/"},
-            color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
-            title="Total por " + ejes_x[0].replace("_", " ").title()
+            barmode="group",
+            title="Total por " + columna_x.replace("_", " ").title()
         )
 
-    # Si selecciona 2 columnas
-    else:
+    elif len(ejes_x) == 2:
+
+        col1, col2 = ejes_x
 
         fig_bar = px.bar(
             graf_pivot,
-            x=ejes_x[0],
+            x=col1,
             y="total_general_s",
-            color="ingresoegreso",
-            facet_col=ejes_x[1],
+            color=col2,
             text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
             labels={"total_general_s": "Total S/"},
-            color_discrete_map={"INGRESO": "#5095B4", "EGRESO": "#BE2323"},
+            barmode="group",
             title="Total por " + " + ".join(ejes_x).replace("_", " ").title()
         )
 
+    else:
+        st.warning("Máximo 2 columnas permitidas.")
+        st.stop()
     # Mostrar valores dentro de la barra
     fig_bar.update_traces(
+        width=ancho_barra,
         textposition="outside",
-        textfont_size=14
+        textangle=-90,  # 🔥 vertical como tu imagen
+        textfont=dict(
+            size=14
+        ),
+        cliponaxis=False
     )
 
-    # Ajustes generales
+    # Obtener valor máximo
+    max_valor = graf_pivot["total_general_s"].max()
+
+    # Aumentar el rango del eje Y en 15%
+    fig_bar.update_yaxes(range=[0, max_valor * 1.35])
+
+    num_conceptos = graf_pivot[ejes_x[-1]].nunique()
+
+    if num_conceptos > 8:
+        margen_superior = 230
+    else:
+        margen_superior = 190
+    # Ajustes generales DEFINITIVOS
     fig_bar.update_layout(
         xaxis_title=None,
         yaxis_title="Total S/",
         barmode="group",
-        height=700,
+        height=750,
+
+        title=dict(
+            y=0.97,
+            x=0.5,
+            xanchor="center"
+        ),
+
+        # 🔥 LEYENDA FIJA ARRIBA
+        legend=dict(
+            title="Conceptos",
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,         # completamente fuera del área del gráfico
+            xanchor="center",
+            x=0.5
+        ),
+
+        # 🔥 MARGEN REAL PARA QUE NO SE META
+        margin=dict(
+            t=220,          # espacio suficiente arriba
+            b=80,
+            l=60,
+            r=40
+        ),
+
         uniformtext_minsize=12,
-        uniformtext_mode="hide"
+        uniformtext_mode="show"
     )
 
+    fig_bar.update_xaxes(tickangle=-45)
     st.plotly_chart(fig_bar, use_container_width=True)
 
     #Exportacion
@@ -924,7 +995,7 @@ if os.path.exists(ruta_excel):
                 )
 
             excel_buffer.seek(0)
-            zipf.writestr("control_caja.xlsx", excel_buffer.read())
+            zipf.writestr("control_cajaEje.xlsx", excel_buffer.read())
 
             # -----------------------------
             # Gráficos
@@ -1149,6 +1220,6 @@ if os.path.exists(ruta_excel):
     st.download_button(
         "📄 Descargar PDF",
         data=pdf_buffer,
-        file_name="reporte_control_caja.pdf",
+        file_name="reporte_control_cajaEje.pdf",
         mime="application/pdf"
     )
