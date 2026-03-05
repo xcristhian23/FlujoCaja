@@ -90,7 +90,7 @@ from urllib.parse import urlencode
 if not os.path.exists("data"):
     os.makedirs("data")
 
-ruta_excel = "data/control_cajaEje.xlsx"
+ruta_excel = "data/control_caja_ejecu.xlsx"
 
 # --------------------------------------------------
 # Utilidades
@@ -779,107 +779,127 @@ if os.path.exists(ruta_excel):
     # --------------------------------------------------
     st.subheader("📈 Visualización de Gráfico")
 
-    columnas_posibles = [
-        c for c in tabla.columns
-        if c not in ["total_general_s", "total_general_s_fmt"]
-    ]
+    # Colores profesionales financieros
+    color_financiero = {
+        "Ingreso": "#2E8B57",
+        "Egreso": "#C0392B"
+    }
 
-    param_agrupacion = st.query_params.get("agrupacion")
+    # --------------------------------------------------
+    # AGRUPACIÓN PARA GRÁFICO (modo lectura o edición)
+    # --------------------------------------------------
 
-    # Valor inicial
-    if "agrupacion" not in st.session_state:
-        if param_agrupacion and param_agrupacion in columnas_posibles:
-            st.session_state.agrupacion = param_agrupacion
-        elif "clasificacion_1" in columnas_posibles:
-            st.session_state.agrupacion = "clasificacion_1"
-        else:
-            st.session_state.agrupacion = columnas_posibles[0]
+    columnas_posibles = [c for c in tabla.columns if c not in ["total_general_s", "total_general_s_fmt"]]
 
-    # Valor inicial
-    if "agrupacion_multi" not in st.session_state:
-
-        param_agrupacion = st.query_params.get("agrupacion")
-
-        if param_agrupacion:
-            if isinstance(param_agrupacion, str):
-                param_agrupacion = [param_agrupacion]
-
-            st.session_state["agrupacion_multi"] = [
-                c for c in param_agrupacion if c in columnas_posibles
-            ]
-        else:
-            if "clasificacion_1" in columnas_posibles:
-                st.session_state["agrupacion_multi"] = ["clasificacion_1"]
-            else:
-                st.session_state["agrupacion_multi"] = [columnas_posibles[0]]
-
-    ejes_x = st.multiselect(
-        "Agrupar gráfico por (máx. 2 columnas):",
-        options=columnas_posibles,
-        default=st.session_state["agrupacion_multi"],
-        max_selections=2,
-        key="agrupacion_multi",
-        disabled=modo_lectura
-    )
-
-    if not ejes_x:
-        st.warning("Selecciona al menos una columna para el gráfico.")
-        st.stop()
-
-    # Guardar en URL
-    if not modo_lectura:
+    # Leer agrupación desde URL si es lectura
+    if modo_lectura:
+        param_agrupacion = st.query_params.get("agrupacion", ["clasificacion_1"])
+        if isinstance(param_agrupacion, str):
+            param_agrupacion = param_agrupacion.split(",")
+        ejes_x = [c for c in param_agrupacion if c in columnas_posibles][:2]  # máximo 2 columnas
+        if not ejes_x:
+            ejes_x = ["clasificacion_1"] if "clasificacion_1" in columnas_posibles else [columnas_posibles[0]]
+    else:
+        ejes_x = st.multiselect(
+            "Agrupar gráfico por (máx. 2 columnas):",
+            options=columnas_posibles,
+            default=st.session_state.get("agrupacion_multi", ["clasificacion_1"]),
+            max_selections=2,
+            key="agrupacion_multi",
+            disabled=modo_lectura
+        )
         st.query_params["agrupacion"] = ",".join(ejes_x)
 
+    # --------------------------------------------------
+    # Preparación de datos para gráfico
+    # --------------------------------------------------
 
-    # Agrupar tabla filtrada por columna seleccionada + ingreso/egreso
+    df_filtrado["total_general_s"] = pd.to_numeric(df_filtrado["total_general_s"], errors="coerce").fillna(0)
+
     graf_pivot = (
         df_filtrado
+        .copy()
+        .fillna("Sin categoría")
         .groupby(ejes_x + ["ingresoegreso"], as_index=False)["total_general_s"]
         .sum()
     )
 
-    cantidad_barras = graf_pivot.shape[0]
-    # --------------------------------------------------
-    # ANCHO DINÁMICO DE BARRAS
+    if graf_pivot.empty:
+        st.info("No hay datos para mostrar con los filtros actuales.")
+        st.stop()
+
+    # Limitar categorías Top + Otros solo si es 1 columna
+    MAX_CATEGORIAS = 15
+    if len(ejes_x) == 1:
+        col = ejes_x[0]
+        totales = graf_pivot.groupby(col)["total_general_s"].sum().sort_values(ascending=False)
+        if len(totales) > MAX_CATEGORIAS:
+            top = totales.head(MAX_CATEGORIAS).index
+            graf_pivot[col] = graf_pivot[col].apply(lambda x: x if x in top else "Otros")
+            graf_pivot = graf_pivot.groupby([col, "ingresoegreso"], as_index=False)["total_general_s"].sum()
+   # --------------------------------------------------
+    # Ordenar categorías correctamente para Plotly
     # --------------------------------------------------
 
-    if cantidad_barras <= 5:
-        ancho_barra = 0.8
-    elif cantidad_barras <= 10:
-        ancho_barra = 0.4
-    elif cantidad_barras <= 13:
-        ancho_barra = 0.4
-    elif cantidad_barras <= 20:
-        ancho_barra = 0.3
-    else:
-        ancho_barra = 0.1
+    category_orders = {}
+
+    for col in ejes_x:
+        if col == "mes_nombre":
+            # Mantener orden de Enero a Diciembre
+            category_orders[col] = [
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            ]
+        else:
+            # Orden descendente por total_general_s
+            orden = (
+                graf_pivot.groupby(col)["total_general_s"]
+                .sum()
+                .sort_values(ascending=False)
+                .index
+                .tolist()
+            )
+            category_orders[col] = orden
+
     # --------------------------------------------------
-    # GRÁFICO DINÁMICO SEGURO (1 o 2 columnas)
+    # Cálculo de barras
+    # --------------------------------------------------
+
+    cantidad_barras = graf_pivot[ejes_x[0]].nunique()
+
+    # --------------------------------------------------
+    # Cálculo profesional de barras por grupo
     # --------------------------------------------------
 
     if len(ejes_x) == 1:
+        barras_por_grupo = graf_pivot["ingresoegreso"].nunique()
+    else:
+        barras_por_grupo = graf_pivot[ejes_x[1]].nunique()
 
+    # ancho máximo permitido por plotly es 1
+    ancho_barra = min(0.9 / barras_por_grupo, 0.35)
+
+    # --------------------------------------------------
+    # Construcción del gráfico con category_orders
+    # --------------------------------------------------
+    if len(ejes_x) == 1:
         columna_x = ejes_x[0]
-
-        # Si es clasificación → colorear por esa columna
-        if columna_x in graf_pivot.columns:
-            color_col = columna_x
-        else:
-            color_col = "ingresoegreso"
 
         fig_bar = px.bar(
             graf_pivot,
             x=columna_x,
             y="total_general_s",
-            color=color_col,
+            color="ingresoegreso",
+            color_discrete_map=color_financiero,
             text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
             labels={"total_general_s": "Total S/"},
             barmode="group",
-            title="Total por " + columna_x.replace("_", " ").title()
+            title="Total por " + columna_x.replace("_", " ").title(),
+            hover_data={columna_x: True, "ingresoegreso": True, "total_general_s": ":,.2f"},
+            category_orders={columna_x: category_orders[columna_x]}  # 🔹 aplicar orden
         )
 
     elif len(ejes_x) == 2:
-
         col1, col2 = ejes_x
 
         fig_bar = px.bar(
@@ -890,71 +910,159 @@ if os.path.exists(ruta_excel):
             text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
             labels={"total_general_s": "Total S/"},
             barmode="group",
-            title="Total por " + " + ".join(ejes_x).replace("_", " ").title()
+            title="Total por " + " + ".join(ejes_x).replace("_", " ").title(),
+            hover_data={col1: True, col2: True, "total_general_s": ":,.2f"},
+            category_orders={
+                col1: category_orders[col1],
+                col2: category_orders[col2]
+            }  # 🔹 aplicar orden a ambas columnas
         )
 
     else:
         st.warning("Máximo 2 columnas permitidas.")
         st.stop()
-    # Mostrar valores dentro de la barra
+
+    # --------------------------------------------------
+    # Estilo de barras
+    # --------------------------------------------------
+
+    # --------------------------------------------------
+    # Ajuste automático de textos para evitar colisiones
+    # --------------------------------------------------
+
+    if cantidad_barras <= 10:
+        text_pos = "outside"
+        text_angle = -90
+        text_size = 13
+
+    elif cantidad_barras <= 18:
+        text_pos = "outside"
+        text_angle = -90
+        text_size = 11
+
+    elif cantidad_barras <= 28:
+        text_pos = "inside"
+        text_angle = 0
+        text_size = 10
+
+    else:
+        text_pos = "none"
+        text_angle = 0
+        text_size = 10
+
     fig_bar.update_traces(
         width=ancho_barra,
-        textposition="outside",
-        textangle=-90,  # 🔥 vertical como tu imagen
-        textfont=dict(
-            size=14
-        ),
+        textposition=text_pos,
+        textangle=text_angle,
+        textfont=dict(size=text_size),
         cliponaxis=False
     )
 
-    # Obtener valor máximo
-    max_valor = graf_pivot["total_general_s"].max()
+    fig_bar.update_traces(
+        hovertemplate="<b>%{x}</b><br>Total: S/ %{y:,.2f}<extra></extra>"
+    )
 
-    # Aumentar el rango del eje Y en 15%
-    fig_bar.update_yaxes(range=[0, max_valor * 1.35])
+    # --------------------------------------------------
+    # Escala del eje Y
+    # --------------------------------------------------
+
+    # --------------------------------------------------
+    # ESCALA INTELIGENTE DEL EJE Y
+    # --------------------------------------------------
+
+    max_valor = graf_pivot["total_general_s"].max()
+    min_valor = graf_pivot["total_general_s"].min()
+
+    # Detectar diferencia entre valores
+    if min_valor == 0:
+        ratio = max_valor
+    else:
+        ratio = max_valor / min_valor
+
+    # Espacio superior dinámico
+    if ratio > 1000:
+        espacio_superior = 1.9
+    elif ratio > 200:
+        espacio_superior = 1.7
+    elif ratio > 50:
+        espacio_superior = 1.55
+    elif ratio > 10:
+        espacio_superior = 1.45
+    else:
+        espacio_superior = 1.35
+
+    fig_bar.update_yaxes(range=[0, max_valor * espacio_superior])
+    fig_bar.update_yaxes(automargin=True)
+    # --------------------------------------------------
+    # Ajustes dinámicos
+    # --------------------------------------------------
 
     num_conceptos = graf_pivot[ejes_x[-1]].nunique()
 
-    if num_conceptos > 8:
-        margen_superior = 230
-    else:
-        margen_superior = 190
-    # Ajustes generales DEFINITIVOS
+    margen_superior = 170 + (num_conceptos * 6)
+
+    if margen_superior > 260:
+        margen_superior = 260
+
+    altura_grafico = 500 + (cantidad_barras * 35)
+
+    if altura_grafico > 1100:
+        altura_grafico = 1100
+    
+    # --------------------------------------------------
+    # Layout profesional
+    # --------------------------------------------------
+
     fig_bar.update_layout(
         xaxis_title=None,
         yaxis_title="Total S/",
-        barmode="group",
-        height=750,
+        height=altura_grafico,
 
         title=dict(
-            y=0.97,
-            x=0.5,
-            xanchor="center"
+            text="Total por " + " + ".join(ejes_x).replace("_", " ").title(),
+            #y=0.95,           # 🔹 bajar un poco el título para dejar espacio a la leyenda arriba
+            x=0,
+            y=1,
+            xanchor="left",
+            yanchor="top"
         ),
 
-        # 🔥 LEYENDA FIJA ARRIBA
         legend=dict(
             title="Conceptos",
             orientation="h",
-            yanchor="bottom",
-            y=1.02,         # completamente fuera del área del gráfico
+            yanchor="bottom",  # el punto y= se refiere al fondo de la leyenda
+            y=1.30,            # 🔹 colocar la leyenda por encima del título
             xanchor="center",
             x=0.5
         ),
 
-        # 🔥 MARGEN REAL PARA QUE NO SE META
         margin=dict(
-            t=220,          # espacio suficiente arriba
+            t=margen_superior + 40,  # 🔹 aumentar margen superior si es necesario
             b=80,
             l=60,
             r=40
         ),
 
+        bargap=0.35,
+        bargroupgap=0.18,
         uniformtext_minsize=12,
         uniformtext_mode="show"
     )
 
+    # Grid suave
+    fig_bar.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(200,200,200,0.25)"
+    )
+
+    # Formato monetario
+    fig_bar.update_yaxes(
+        tickprefix="S/ ",
+        separatethousands=True
+    )
+
     fig_bar.update_xaxes(tickangle=-45)
+
     st.plotly_chart(fig_bar, use_container_width=True)
 
     #Exportacion
@@ -995,7 +1103,7 @@ if os.path.exists(ruta_excel):
                 )
 
             excel_buffer.seek(0)
-            zipf.writestr("control_cajaEje.xlsx", excel_buffer.read())
+            zipf.writestr("control_caja_ejecu.xlsx", excel_buffer.read())
 
             # -----------------------------
             # Gráficos
@@ -1220,6 +1328,6 @@ if os.path.exists(ruta_excel):
     st.download_button(
         "📄 Descargar PDF",
         data=pdf_buffer,
-        file_name="reporte_control_cajaEje.pdf",
+        file_name="reporte_control_caja_ejecu.pdf",
         mime="application/pdf"
     )
