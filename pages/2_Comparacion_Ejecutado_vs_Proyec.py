@@ -31,7 +31,7 @@ st.set_page_config(page_title="Control de Caja Comparativo", layout="wide")
 
 USUARIOS = {
     "admin": {
-        "password": "finanzas2026.",
+        "password": "fin2026.",
         "rol": "admin"
     },
     "operador": {

@@ -4,8 +4,8 @@ import plotly.express as px
 import zipfile
 import plotly.express as px
 import streamlit.components.v1 as components
-
 import plotly.io as pio
+
 pio.kaleido.scope.default_format = "png"
 pio.kaleido.scope.default_scale = 2
 pio.kaleido.scope.default_width = 600
@@ -21,6 +21,31 @@ from io import BytesIO
 from datetime import datetime
 from reportlab.platypus import Paragraph
 from reportlab.lib.styles import ParagraphStyle
+
+import json
+import uuid
+
+def guardar_vista(filtros):
+
+    view_id = uuid.uuid4().hex[:8]  # 8 caracteres
+
+    ruta = f"data/views/{view_id}.json"
+
+    with open(ruta, "w") as f:
+        json.dump(filtros, f)
+
+    return view_id
+
+def cargar_vista(view_id):
+
+    ruta = f"data/views/{view_id}.json"
+
+    if os.path.exists(ruta):
+
+        with open(ruta) as f:
+            return json.load(f)
+
+    return None
 
 st.set_page_config(page_title="Control de Caja 2026", layout="wide")
 
@@ -90,7 +115,10 @@ from urllib.parse import urlencode
 if not os.path.exists("data"):
     os.makedirs("data")
 
-ruta_excel = "data/control_caja_ejecu.xlsx"
+if not os.path.exists("data/views"):
+    os.makedirs("data/views")
+
+ruta_excel = "data/control_caja_ejecutado.xlsx"
 
 # --------------------------------------------------
 # Utilidades
@@ -256,6 +284,24 @@ if os.path.exists(ruta_excel):
 
     query_params = st.query_params
 
+    # --------------------------------------------------
+    # RESTAURAR FILTROS DESDE URL CORTA
+    # --------------------------------------------------
+
+    if "v" in query_params:
+
+        filtros_guardados = cargar_vista(query_params["v"])
+
+        if filtros_guardados:
+
+            for k, v in filtros_guardados.items():
+
+                if isinstance(v, list):
+                    st.query_params[k] = ",".join(v)
+                else:
+                    st.query_params[k] = str(v)
+
+            del st.query_params["v"]
     # --------------------------------------------------
     # VARIABLES POR DEFECTO (para modo lectura)
     # --------------------------------------------------
@@ -578,42 +624,11 @@ if os.path.exists(ruta_excel):
     else:
         modo = st.query_params.get("modo", "Sin comparación")
 
-    # --------------------------------------------------
-    # LINK COMPARTIBLE
-    # --------------------------------------------------
-    # --------------------------------------------------
-    # LINK COMPARTIBLE REAL (FUNCIONA EN CLOUD)
-    # --------------------------------------------------
-
-    if not modo_lectura:
-
-        st.sidebar.divider()
-        st.sidebar.subheader("🔗 Compartir vista")
-
-        components.html(
-            """
-            <script>
-            const url = window.parent.location.href;
-            const container = window.parent.document.querySelector('section.main');
-            </script>
-            """,
-            height=0,
-        )
-
-        st.sidebar.markdown(
-            """
-            <a href="" onclick="navigator.clipboard.writeText(window.location.href); return false;">
-                📋 Copiar URL completa
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-
+    
     # --------------------------------------------------
     # INGRESOS / EGRESOS / SALDO
     # --------------------------------------------------
+    st.divider()
     st.subheader("📌 Resumen General")
 
     if "ingresoegreso" not in df_filtrado.columns:
@@ -634,7 +649,8 @@ if os.path.exists(ruta_excel):
         col1.metric("💵 Total Ingresos", f"S/ {total_ingresos:,.2f}")
         col2.metric("💸 Total Egresos", f"S/ {total_egresos:,.2f}")
         col3.metric("⚖️ Saldo", f"S/ {saldo:,.2f}")
-
+        
+    st.divider()
     # Grafico ingreso y egresos
     # --------------------------------------------------
     st.subheader("💼 Distribución de Ingresos y Egresos")
@@ -764,6 +780,7 @@ if os.path.exists(ruta_excel):
         .rename(columns={"total_general_s_fmt": "TOTAL"})
         .style
         .apply(pintar_egresos, axis=1)
+        .set_properties(subset=["TOTAL"], **{"font-weight": "bold"})
     )
 
     st.dataframe(tabla_estilizada, use_container_width=True)
@@ -781,10 +798,24 @@ if os.path.exists(ruta_excel):
 
     # Colores profesionales financieros
     color_financiero = {
-        "Ingreso": "#2E8B57",
-        "Egreso": "#C0392B"
+        "INGRESO": "#16a34a",
+        "EGRESO": "#dc2626"
     }
-
+    # Paleta ejecutiva para gráficos
+    paleta_ejecutiva = [
+        "#5B9BD5",  # azul corporativo 5B9BD5
+        "#A5A5A5",  # azul claro
+        "#70AD47",  # violeta elegante
+        "#FFC000",  # teal
+        "#ED7D31",  # ámbar
+        "#4472C4",  # gris corporativo
+        "#9E480E",  # púrpura
+        "#636363", 
+        "#997300",
+        "#255E91",
+        "#43682B",
+        "#722E2E", # verde ejecutivo
+    ]
     # --------------------------------------------------
     # AGRUPACIÓN PARA GRÁFICO (modo lectura o edición)
     # --------------------------------------------------
@@ -861,11 +892,7 @@ if os.path.exists(ruta_excel):
             )
             category_orders[col] = orden
 
-    # --------------------------------------------------
-    # Cálculo de barras
-    # --------------------------------------------------
-
-    cantidad_barras = graf_pivot[ejes_x[0]].nunique()
+    
 
     # --------------------------------------------------
     # Cálculo profesional de barras por grupo
@@ -876,59 +903,11 @@ if os.path.exists(ruta_excel):
     else:
         barras_por_grupo = graf_pivot[ejes_x[1]].nunique()
 
-    # ancho máximo permitido por plotly es 1
-    ancho_barra = min(0.9 / barras_por_grupo, 0.35)
-
     # --------------------------------------------------
-    # Construcción del gráfico con category_orders
-    # --------------------------------------------------
-    if len(ejes_x) == 1:
-        columna_x = ejes_x[0]
-
-        fig_bar = px.bar(
-            graf_pivot,
-            x=columna_x,
-            y="total_general_s",
-            color="ingresoegreso",
-            color_discrete_map=color_financiero,
-            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
-            labels={"total_general_s": "Total S/"},
-            barmode="group",
-            title="Total por " + columna_x.replace("_", " ").title(),
-            hover_data={columna_x: True, "ingresoegreso": True, "total_general_s": ":,.2f"},
-            category_orders={columna_x: category_orders[columna_x]}  # 🔹 aplicar orden
-        )
-
-    elif len(ejes_x) == 2:
-        col1, col2 = ejes_x
-
-        fig_bar = px.bar(
-            graf_pivot,
-            x=col1,
-            y="total_general_s",
-            color=col2,
-            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.2f}"),
-            labels={"total_general_s": "Total S/"},
-            barmode="group",
-            title="Total por " + " + ".join(ejes_x).replace("_", " ").title(),
-            hover_data={col1: True, col2: True, "total_general_s": ":,.2f"},
-            category_orders={
-                col1: category_orders[col1],
-                col2: category_orders[col2]
-            }  # 🔹 aplicar orden a ambas columnas
-        )
-
-    else:
-        st.warning("Máximo 2 columnas permitidas.")
-        st.stop()
-
-    # --------------------------------------------------
-    # Estilo de barras
+    # Cálculo de barras
     # --------------------------------------------------
 
-    # --------------------------------------------------
-    # Ajuste automático de textos para evitar colisiones
-    # --------------------------------------------------
+    cantidad_barras = graf_pivot[ejes_x[0]].nunique()
 
     if cantidad_barras <= 10:
         text_pos = "outside"
@@ -946,26 +925,79 @@ if os.path.exists(ruta_excel):
         text_size = 10
 
     else:
-        text_pos = "none"
-        text_angle = 0
-        text_size = 10
+        text_pos = "outside"
+        text_angle = -90
+        text_size = 5
+    # ancho máximo permitido por plotly es 1
+    #ancho_barra = min(0.9 / barras_por_grupo, 0.35)
+    barras_total = cantidad_barras*barras_por_grupo
+    ancho_barra = min(0.9 / barras_total, 0.35)
+    # --------------------------------------------------
+    # Construcción del gráfico con category_orders
+    # --------------------------------------------------
+    if len(ejes_x) == 1:
+        columna_x = ejes_x[0]
 
+        fig_bar = px.bar(
+            graf_pivot,
+            x=columna_x,
+            y="total_general_s",
+            color="ingresoegreso",
+            color_discrete_map=color_financiero,
+            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.0f}"),
+            labels={"total_general_s": "Total S/"},
+            barmode="group",
+            title="Total por " + columna_x.replace("_", " ").title(),
+            hover_data={columna_x: True, "ingresoegreso": True, "total_general_s": ":,.2f"},
+            category_orders={columna_x: category_orders[columna_x]}  # 🔹 aplicar orden
+        )
+
+        for trace in fig_bar.data:
+            trace.textfont = dict(color=trace.marker.color)
+            trace.texttemplate = "<b>%{text}</b>"
+    elif len(ejes_x) == 2:
+        col1, col2 = ejes_x
+
+        fig_bar = px.bar(
+            graf_pivot,
+            x=col1,
+            y="total_general_s",
+            color=col2,
+            color_discrete_sequence=paleta_ejecutiva,
+            text=graf_pivot["total_general_s"].map(lambda x: f"S/ {x:,.0f}"),
+            labels={"total_general_s": "Total S/"},
+            barmode="group",
+            title="Total por " + " + ".join(ejes_x).replace("_", " ").title(),
+            hover_data={col1: True, col2: True, "total_general_s": ":,.2f"},
+            category_orders={
+                col1: category_orders[col1],
+                col2: category_orders[col2]
+            }  # 🔹 aplicar orden a ambas columnas
+        )
+        for trace in fig_bar.data:
+            trace.textfont = dict(color=trace.marker.color)
+            trace.texttemplate = "<b>%{text}</b>"
+
+    else:
+        st.warning("Máximo 2 columnas permitidas.")
+        st.stop()
+
+    # --------------------------------------------------
+    # Ajuste automático de textos para evitar colisiones
+    # --------------------------------------------------
+    
+    
     fig_bar.update_traces(
-        width=ancho_barra,
+        #width=ancho_barra,
         textposition=text_pos,
         textangle=text_angle,
         textfont=dict(size=text_size),
         cliponaxis=False
     )
-
+    
     fig_bar.update_traces(
         hovertemplate="<b>%{x}</b><br>Total: S/ %{y:,.2f}<extra></extra>"
     )
-
-    # --------------------------------------------------
-    # Escala del eje Y
-    # --------------------------------------------------
-
     # --------------------------------------------------
     # ESCALA INTELIGENTE DEL EJE Y
     # --------------------------------------------------
@@ -1008,10 +1040,18 @@ if os.path.exists(ruta_excel):
 
     if altura_grafico > 1100:
         altura_grafico = 1100
-    
     # --------------------------------------------------
-    # Layout profesional
+    # ESPACIO DINÁMICO ENTRE BARRAS
     # --------------------------------------------------
+
+    if cantidad_barras <= 4:
+        gap_barras = 0.55
+    elif cantidad_barras <= 8:
+        gap_barras = 0.45
+    elif cantidad_barras <= 15:
+        gap_barras = 0.35
+    else:
+        gap_barras = 0.25
 
     fig_bar.update_layout(
         xaxis_title=None,
@@ -1042,13 +1082,13 @@ if os.path.exists(ruta_excel):
             l=60,
             r=40
         ),
-
-        bargap=0.35,
-        bargroupgap=0.18,
+        barmode="group",
+        bargap=0.25,
+        bargroupgap=0.05,
         uniformtext_minsize=12,
         uniformtext_mode="show"
     )
-
+    #st.divider()
     # Grid suave
     fig_bar.update_yaxes(
         showgrid=True,
@@ -1060,7 +1100,8 @@ if os.path.exists(ruta_excel):
         tickprefix="S/ ",
         separatethousands=True
     )
-
+    st.write(cantidad_barras)
+    st.write(barras_por_grupo)
     fig_bar.update_xaxes(tickangle=-45)
 
     st.plotly_chart(fig_bar, use_container_width=True)
@@ -1103,7 +1144,7 @@ if os.path.exists(ruta_excel):
                 )
 
             excel_buffer.seek(0)
-            zipf.writestr("control_caja_ejecu.xlsx", excel_buffer.read())
+            zipf.writestr("control_caja_ejecutado.xlsx", excel_buffer.read())
 
             # -----------------------------
             # Gráficos
@@ -1123,7 +1164,65 @@ if os.path.exists(ruta_excel):
 
         #boton
 
-        st.divider()
+    st.divider()
+    # --------------------------------------------------
+    # LINK COMPARTIBLE
+    # --------------------------------------------------
+
+    if not modo_lectura:
+
+        st.sidebar.divider()
+
+        filtros_compartir = {}
+
+        for k, v in st.query_params.items():
+            if isinstance(v, list):
+                filtros_compartir[k] = v
+            else:
+                if "," in str(v):
+                    filtros_compartir[k] = str(v).split(",")
+                else:
+                    filtros_compartir[k] = v
+
+
+        # generar id de vista
+        view_id = guardar_vista(filtros_compartir)
+
+        components.html(f"""
+        <div style="margin-top:10px">
+
+        <button onclick="copyUrl()" style="
+        background:#2E8B57;
+        color:white;
+        border:none;
+        padding:10px 16px;
+        border-radius:8px;
+        cursor:pointer;
+        font-size:14px;
+        width:100%;
+        ">
+        🔗 Generar y copiar URL corta
+        </button>
+
+        </div>
+
+        <script>
+
+        function copyUrl() {{
+
+        const base = window.parent.location.origin + window.parent.location.pathname;
+        const url = base + "?v={view_id}";
+
+        navigator.clipboard.writeText(url).then(function() {{
+            alert("✅ URL copiada:\\n" + url);
+        }});
+
+        }}
+
+        </script>
+        """, height=80)
+
+    st.divider()
     st.subheader("📤 Exportar Excel + Gráficos")
 
     zip_file = exportar_dashboard(
@@ -1138,7 +1237,7 @@ if os.path.exists(ruta_excel):
     st.download_button(
         label="📦 Descargar Excel + Gráficos",
         data=zip_file,
-        file_name="Control_Caja_Excel.zip",
+        file_name="Control_Caja_Excel_Proyectado.zip",
         mime="application/zip"
     )
 
@@ -1328,6 +1427,6 @@ if os.path.exists(ruta_excel):
     st.download_button(
         "📄 Descargar PDF",
         data=pdf_buffer,
-        file_name="reporte_control_caja_ejecu.pdf",
+        file_name="reporte_control_caja_ejecutado.pdf",
         mime="application/pdf"
     )
