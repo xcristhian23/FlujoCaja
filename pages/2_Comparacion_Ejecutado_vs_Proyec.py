@@ -899,7 +899,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
             textangle=90,
             constraintext="none",
             textfont=dict(
-                size=13,
+                size=16,
                 color="#ED7D31",
                 family="Arial Black"
             ),
@@ -917,8 +917,9 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
             texttemplate="%{text}",
             textposition="outside",
             textangle=90,
+            constraintext="none",
             textfont=dict(
-                size=13,
+                size=16,
                 color="#2E7D32",
                 family="Arial Black"
             ),
