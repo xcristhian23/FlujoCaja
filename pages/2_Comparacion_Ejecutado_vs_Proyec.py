@@ -11,16 +11,38 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 import os
-
+import uuid
+import json
 # --------------------------------------------------
 # CONFIGURACIÓN
 # --------------------------------------------------
 
 st.set_page_config(page_title="Control de Caja Comparativo", layout="wide")
 
-# --------------------------------------------------
-# CONTROL DE ACCESO MULTIROL
-# --------------------------------------------------
+st.markdown("""
+    <style>
+
+    .block-container {
+        padding-top: 1rem;
+    }
+
+    section[data-testid="stSidebar"] {
+        background: #F7F9FC;
+    }
+
+    h1,h2,h3 {
+        font-weight:600;
+    }
+
+    div[data-testid="metric-container"] {
+        background:white;
+        border-radius:10px;
+        padding:10px;
+        box-shadow:0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
 
 # --------------------------------------------------
 # USUARIOS Y ROLES
@@ -109,6 +131,9 @@ else:
 
 if not os.path.exists("data"):
     os.makedirs("data")
+# Carpeta para vistas compartidas
+if not os.path.exists("data/views"):
+    os.makedirs("data/views")
 
 pio.kaleido.scope.default_format = "png"
 pio.kaleido.scope.default_scale = 2
@@ -116,6 +141,33 @@ pio.kaleido.scope.default_scale = 2
 # --------------------------------------------------
 # UTILIDADES
 # --------------------------------------------------
+
+# --------------------------------------------------
+# SISTEMA DE VISTAS COMPARTIDAS
+# --------------------------------------------------
+
+def guardar_vista(filtros):
+
+    view_id = uuid.uuid4().hex[:8]
+
+    ruta = f"data/views/{view_id}.json"
+
+    with open(ruta, "w") as f:
+        json.dump(filtros, f)
+
+    return view_id
+
+
+def cargar_vista(view_id):
+
+    ruta = f"data/views/{view_id}.json"
+
+    if os.path.exists(ruta):
+
+        with open(ruta) as f:
+            return json.load(f)
+
+    return None
 
 def normalizar(col):
     return col.lower().replace(" ", "_").replace("/", "").replace("°", "")
@@ -152,7 +204,21 @@ def formato_moneda(x):
 # UI
 # --------------------------------------------------
 
-st.title("💰 Sistema Control de Caja – Comparativo Ejecutivo")
+st.markdown("""
+<div style="
+background: linear-gradient(90deg,#1F4E79,#2E75B6);
+padding:18px;
+border-radius:10px;
+margin-bottom:15px;
+color:white">
+
+<h2 style="margin:0">💰 Control de Caja – Comparativo Ejecutivo</h2>
+<span style="font-size:14px;opacity:0.9">
+Análisis Financiero Ejecutado vs Proyectado
+</span>
+
+</div>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # --------------------------------------------------
@@ -161,6 +227,7 @@ st.title("💰 Sistema Control de Caja – Comparativo Ejecutivo")
 
 ruta_ej = "data/ejecutado.xlsx"
 ruta_pr = "data/proyectado.xlsx"
+
 
 # 🔴 BOTÓN PARA LIMPIAR ARCHIVOS
 st.sidebar.divider()
@@ -238,6 +305,25 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
 
     query_params = st.query_params
 
+    # --------------------------------------------------
+    # CARGAR VISTA DESDE URL CORTA (SIN LOOP)
+    # --------------------------------------------------
+
+    if "vista_cargada" not in st.session_state:
+
+        view_id = st.query_params.get("v")
+
+        if view_id:
+
+            vista = cargar_vista(view_id)
+
+            if vista:
+
+                for k, v in vista.items():
+                    st.query_params[k] = v
+
+                st.session_state["vista_cargada"] = True
+                st.rerun()
     # =====================================================
     # 🔁 RESTAURAR FILTROS DESPUÉS DEL LOGIN
     # =====================================================
@@ -391,9 +477,15 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
 
 
     # Detectar cambio de mes
-    if mes_seleccionado != "Todos" and not modo_lectura:
+    if not modo_lectura:
 
-        df_mes_temp = df[df["mes_nombre"] == mes_seleccionado]
+        if mes_seleccionado != "Todos":
+
+            df_mes_temp = df[df["mes_nombre"] == mes_seleccionado]
+
+        else:
+            # 🔥 Cuando es "Todos", usar todo el dataset
+            df_mes_temp = df.copy()
 
         if not df_mes_temp.empty:
 
@@ -474,8 +566,6 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
                 df_filtrado[col].isin(valores_seleccionados)
             ]
 
-
-    
     # --------------------------------------------------
     # RANGO DE FECHAS (VERSIÓN SEGURA)
     # --------------------------------------------------
@@ -568,31 +658,6 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     #if not params_lectura:
 
     st.sidebar.divider()
-    st.sidebar.subheader("🔗 Compartir vistas")
-
-    components.html(
-        """
-        <script>
-        const url = window.parent.location.href;
-        const container = window.parent.document.querySelector('section.main');
-        </script>
-        """,
-        height=0,
-    )
-
-    st.sidebar.markdown(
-        """
-        <a href="" onclick="
-        const url = new URL(window.location.href);
-        url.searchParams.set('view','1');
-        navigator.clipboard.writeText(url.toString());
-        return false;">
-            📋 Copiar URL modo lectura
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
-
 
     columnas_grupo = columnas_filtro.copy()
 
@@ -621,15 +686,39 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     diferencia = total_ej - total_pr
     variacion = (diferencia / total_pr * 100) if total_pr != 0 else 0
     cumplimiento = (total_ej/total_pr * 100) if total_ej != 0 else 0
+
+    def card_kpi(titulo, valor, color):
+
+        st.markdown(f"""
+        <div style="
+        background:white;
+        padding:18px;
+        border-radius:10px;
+        border-left:6px solid {color};
+        box-shadow:0 2px 8px rgba(0,0,0,0.05);
+        ">
+        <div style="font-size:14px;color:#666">{titulo}</div>
+        <div style="font-size:26px;font-weight:700">{valor}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("💵 Ejecutado", formato_moneda(total_ej))
-    col2.metric("📊 Proyectado", formato_moneda(total_pr))
-    col3.metric("📉 Diferencia", formato_moneda(diferencia))
-    col4.metric("📈 % Cumplimiento.", f"{cumplimiento:,.2f}%")
+    with col1:
+        card_kpi("💵 Ejecutado", formato_moneda(total_ej), "#1F4E79")
 
+    with col2:
+        card_kpi("💵 Proyectado", formato_moneda(total_pr), "#ED7D31")
+
+    with col3:
+        card_kpi("⚖️Diferencia", formato_moneda(diferencia), "#BE2323")
+
+    with col4:
+        card_kpi("% Cumplimiento", f"{cumplimiento:,.2f}%", "#2E8B57")
+
+    st.sidebar.divider()
     # --------------------------------------------------
-    # INGRESOS VS EGRESOS
+    # INGRESOS VS EGRESOS (VERSIÓN EJECUTIVA)
     # --------------------------------------------------
 
     if "ingresoegreso" in df_filtrado.columns:
@@ -640,13 +729,94 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
             .sum()
         )
 
-        fig_ie = px.bar(
-            ie,
-            x="ingresoegreso",
-            y="total_general_s",
-            color="tipo_archivo",
+        import plotly.graph_objects as go
+
+        fig_ie = go.Figure()
+
+        # ----------------------------------------
+        # Ejecutado
+        # ----------------------------------------
+
+        df_ej_ie = ie[ie["tipo_archivo"] == "Ejecutado"]
+
+        fig_ie.add_trace(go.Bar(
+            x=df_ej_ie["ingresoegreso"],
+            y=df_ej_ie["total_general_s"],
+            name="Ejecutado",
+            marker_color="#1F4E79",
+            text=[f"S/ {v:,.0f}" for v in df_ej_ie["total_general_s"]],
+            textposition="outside",
+            textfont=dict(
+                size=14,
+                family="Arial Black",
+                color="#1F4E79"
+            ),
+            width=0.35
+        ))
+
+        # ----------------------------------------
+        # Proyectado
+        # ----------------------------------------
+
+        df_pr_ie = ie[ie["tipo_archivo"] == "Proyectado"]
+
+        fig_ie.add_trace(go.Bar(
+            x=df_pr_ie["ingresoegreso"],
+            y=df_pr_ie["total_general_s"],
+            name="Proyectado",
+            marker_color="#ED7D31",
+            text=[f"S/ {v:,.0f}" for v in df_pr_ie["total_general_s"]],
+            textposition="outside",
+            textfont=dict(
+                size=14,
+                family="Arial Black",
+                color="#ED7D31"
+            ),
+            width=0.35
+        ))
+
+        # ----------------------------------------
+        # Layout ejecutivo
+        # ----------------------------------------
+    
+
+        max_y = ie["total_general_s"].max()
+
+        fig_ie.update_layout(
+
+            title=dict(
+                text="Ingresos vs Egresos – Comparativo",
+                x=0.5,
+                xanchor="center",
+                font=dict(size=20)
+            ),
+
             barmode="group",
-            title="Ingresos vs Egresos Comparativo"
+
+            yaxis=dict(
+                title="Monto (S/)",
+                range=[0, max_y * 1.35],
+                tickprefix="S/ ",
+                showgrid=True,
+                gridcolor="rgba(0,0,0,0.05)",
+                zeroline=False
+            ),
+
+            xaxis=dict(
+                title="",
+                tickangle=0
+            ),
+
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.05,
+                xanchor="center",
+                x=0.5
+            ),
+
+            template="plotly_white",
+            height=500
         )
 
         st.plotly_chart(fig_ie, use_container_width=True)
@@ -696,8 +866,8 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
     if mes_seleccionado != "Todos":
         tabla.insert(0, "Mes Seleccionado", mes_seleccionado)
 
-    st.subheader("📊 Resultado Comparativo")
-
+    #st.subheader("📊 Resultado Comparativo")
+    st.markdown("### 📊 Resultado Comparativo Financiero")
     def color_diferencia(val):
         if val < 0:
             return "color: #BE2323"
@@ -716,11 +886,6 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         .applymap(color_diferencia, subset=["Diferencia"]),
         use_container_width=True
     )
-
-    # ----------------------------------------
-    # Selector dinámico de dimensión
-    # ----------------------------------------
-
     # ----------------------------------------
     # Selector dinámico de dimensión (CON URL)
     # ----------------------------------------
@@ -755,32 +920,6 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         eje_x = "clasificacion_1"
     else:
         eje_x = columnas_grupo[0]
-
-    #fig_bar = px.bar(
-    #    tabla,
-    #    x=eje_x,
-    #    y="total_general_s",
-    #    text_auto=".2s",
-    #    labels={
-    #        "total_general_s": "Total S/"
-    #    },
-    #    title="Total por Clasificación"
-    #)
-
-    # 👉 Personalizar el hover (tooltip)
-     #fig_bar.update_traces(
-     #    hovertemplate=
-     #        "<b>%{x}</b><br>" +
-      #       "Total: S/ %{y:,.2f}" +
-       #      "<extra></extra>"
-  #   )
-
-   #  fig_bar.update_layout(
-    #     xaxis_title=None,
-    #     height=500
-   #  )
-
-   #  st.plotly_chart(fig_bar, use_container_width=True)
 
     columna_descripcion = st.selectbox(
         "Agrupar gráfico por:",
@@ -927,6 +1066,20 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         ))
 
 
+        # --------------------------------------------------
+        # ORDENAR MESES CORRECTAMENTE
+        # --------------------------------------------------
+
+        orden_meses = [
+            "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+            "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+        ]
+
+        if columna_descripcion == "mes_nombre":
+            fig.update_xaxes(
+                categoryorder="array",
+                categoryarray=orden_meses
+            )
         # ----------------------------------------
         # Layout ejecutivo
         # ----------------------------------------
@@ -982,6 +1135,120 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         )
 
         st.plotly_chart(fig, use_container_width=True)
-        
+       
+        # --------------------------------------------------
+        # GENERAR URL CORTA (IGUAL AL PROYECTO EJEMPLO)
+        # --------------------------------------------------
+        if not modo_lectura:
+
+            st.sidebar.divider()
+            filtros_compartir = dict(st.query_params)
+
+            view_id = guardar_vista(filtros_compartir)
+
+            components.html(f"""
+            <div style="margin-top:10px">
+
+            <button onclick="copyUrl()" style="
+            background:#2E8B57;
+            color:white;
+            border:none;
+            padding:10px 16px;
+            border-radius:8px;
+            cursor:pointer;
+            font-size:14px;
+            width:100%;
+            ">
+            🔗 Generar y copiar URL corta
+            </button>
+
+            </div>
+
+            <script>
+
+            function copyUrl() {{
+
+            const base = window.parent.location.origin + window.parent.location.pathname;
+            const url = base + "?v={view_id}";
+
+            navigator.clipboard.writeText(url).then(function() {{
+                alert("✅ URL copiada:\\n" + url);
+            }});
+
+            }}
+
+            </script>
+            """, height=80)
+
+         # --------------------------------------------------
+        # EXPORTACIONES (EXCEL + GRÁFICO)
+        # --------------------------------------------------
+
+        st.divider()
+        st.subheader("⬇️ Exportar resultados")
+
+        col_exp1, col_exp2 = st.columns(2)
+
+        # ----------------------------------------
+        # EXPORTAR EXCEL
+        # ----------------------------------------
+
+        with col_exp1:
+
+            buffer_excel = BytesIO()
+
+            with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
+
+                # Hoja tabla comparativa
+                tabla.to_excel(writer, sheet_name="Comparativo", index=False)
+
+                # Hoja datos del gráfico
+                graf_pivot.to_excel(writer, sheet_name="Datos Grafico", index=False)
+
+                # Hoja detalle filtrado
+                df_filtrado.to_excel(writer, sheet_name="Detalle", index=False)
+
+            buffer_excel.seek(0)
+
+            st.download_button(
+                label="📊 Descargar Excel completo",
+                data=buffer_excel,
+                file_name="control_caja_comparativo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+
+        # ----------------------------------------
+        # EXPORTAR GRÁFICO PNG
+        # ----------------------------------------
+
+        with col_exp2:
+
+            try:
+
+                buffer_img = BytesIO()
+
+                fig.write_image(
+                    buffer_img,
+                    format="png",
+                    width=1400,
+                    height=800
+                )
+
+                buffer_img.seek(0)
+
+                st.download_button(
+                    label="🖼 Descargar gráfico PNG",
+                    data=buffer_img,
+                    file_name="grafico_fc_comparativo.png",
+                    mime="image/png"
+                )
+
+            except Exception as e:
+
+                st.warning(
+                    "Para exportar gráficos instala Kaleido:\n\n"
+                    "`pip install -U kaleido`"
+                )
 else:
     st.info("👆 Carga ambos archivos para comenzar el análisis comparativo")
