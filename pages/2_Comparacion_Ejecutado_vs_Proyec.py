@@ -972,9 +972,12 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
         fig.update_layout(
             yaxis=dict(
                 range=[0, max_y * 1.35],
-                showgrid=False,        # 🔥 quita líneas horizontales
-                showticklabels=False,  # 🔥 quita 0, 1M, 2M
-                zeroline=False         # 🔥 quita línea en cero
+                showgrid=True,
+                showticklabels=True,
+                tickformat="~s",
+                tickprefix="S/ ",
+                zeroline=False,
+                gridcolor="rgba(0,0,0,0.05)"
             )
         )
 
