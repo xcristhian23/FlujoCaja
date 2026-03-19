@@ -5,7 +5,7 @@ import zipfile
 import plotly.express as px
 import streamlit.components.v1 as components
 import plotly.io as pio
-import base64
+
 pio.kaleido.scope.default_format = "png"
 pio.kaleido.scope.default_scale = 2
 pio.kaleido.scope.default_width = 600
@@ -24,43 +24,6 @@ from reportlab.lib.styles import ParagraphStyle
 
 import json
 import uuid
-
-import requests
-import base64
-import streamlit as st
-
-def subir_a_github(archivo_bytes, nombre_archivo):
-
-    token = st.secrets["GITHUB_TOKEN"]
-    repo = "xcristhian23/FlujoCaja"
-    ruta = f"data/{nombre_archivo}"
-
-    url = f"https://api.github.com/repos/{repo}/contents/{ruta}"
-
-    headers = {
-        "Authorization": f"token {token}"
-    }
-
-    # 🔍 Obtener SHA si ya existe
-    get_resp = requests.get(url, headers=headers)
-
-    sha = None
-    if get_resp.status_code == 200:
-        sha = get_resp.json()["sha"]
-
-    contenido_base64 = base64.b64encode(archivo_bytes).decode()
-
-    data = {
-        "message": f"Actualizando {nombre_archivo}",
-        "content": contenido_base64
-    }
-
-    if sha:
-        data["sha"] = sha
-
-    response = requests.put(url, json=data, headers=headers)
-
-    return response.status_code, response.json()
 
 def guardar_vista(filtros):
 
@@ -86,133 +49,6 @@ def cargar_vista(view_id):
 
 st.set_page_config(page_title="Control de Caja 2026", layout="wide")
 
-st.markdown("""
-<style>
-
-/* =========================
-PALETA CORPORATIVA CVP
-========================= */
-
-:root{
---cvp-rojo:#E52521;
---cvp-verde:#169C5A;
---cvp-gris:#F5F5F5;
---cvp-text:#2B2B2B;
-}
-
-/* =========================
-FONDO GENERAL
-========================= */
-
-.stApp{
-background-color:var(--cvp-gris);
-font-family: "Segoe UI", system-ui;
-color:var(--cvp-text);
-}
-
-/* =========================
-TITULOS
-========================= */
-
-h1,h2,h3{
-font-weight:700;
-}
-
-/* =========================
-SIDEBAR
-========================= */
-
-section[data-testid="stSidebar"]{
-background:#ffffff;
-border-right:1px solid #eee;
-}
-
-/* =========================
-CARDS DASHBOARD
-========================= */
-
-.card{
-background:white;
-padding:20px;
-border-radius:14px;
-box-shadow:0 4px 14px rgba(0,0,0,0.08);
-margin-bottom:20px;
-}
-
-/* =========================
-KPIs
-========================= */
-
-[data-testid="metric-container"]{
-background:white;
-border-radius:14px;
-padding:18px;
-box-shadow:0 4px 14px rgba(0,0,0,0.08);
-border-left:5px solid var(--cvp-verde);
-}
-
-/* =========================
-BOTONES
-========================= */
-
-.stButton>button{
-background:var(--cvp-rojo);
-color:white;
-border:none;
-border-radius:8px;
-padding:10px 18px;
-font-weight:600;
-}
-
-.stButton>button:hover{
-background:#c11c18;
-}
-
-/* =========================
-DOWNLOAD BUTTON
-========================= */
-
-.stDownloadButton>button{
-background:var(--cvp-verde);
-color:white;
-border-radius:8px;
-}
-
-/* =========================
-DATAFRAME
-========================= */
-
-[data-testid="stDataFrame"]{
-border-radius:12px;
-overflow:hidden;
-}
-
-/* =========================
-RESPONSIVE MOBILE
-========================= */
-
-@media (max-width:768px){
-
-.block-container{
-padding:1rem;
-}
-
-[data-testid="metric-container"]{
-margin-bottom:10px;
-}
-
-h1{
-font-size:24px;
-}
-
-h2{
-font-size:20px;
-}
-
-}
-
-</style>
-""", unsafe_allow_html=True)
 # --------------------------------------------------
 # USUARIOS Y ROLES
 # --------------------------------------------------
@@ -323,34 +159,13 @@ def cargar_excel(archivo):
 # --------------------------------------------------
 # UI
 # --------------------------------------------------
-st.markdown(f"""
-    <div style="
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    background:white;
-    padding:14px 24px;
-    border-radius:14px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-    margin-bottom:20px;
-    ">
+col1, col2 = st.columns([6,1])
 
-    <div style="font-size:22px;font-weight:700;color:#E52521">
-    💰 Sistema Control de Caja 2026
-    </div>
+with col1:
+    st.title("💰 Sistema de Control de Caja - 2026 💰 ")
 
-    <div>
-    <img src="data:image/png;base64,{base64.b64encode(open('data/img/cvp.png','rb').read()).decode()}" width="160">
-    </div>
-
-    </div>
-    """, unsafe_allow_html=True)
-
-#with col1:
- #   st.title("💰 Sistema de Control de Caja - 2026 💰 ")
-
-#with col2:
- #   st.image("data/img/cvp.png", width=210)
+with col2:
+    st.image("data/img/cvp.png", width=210)
 
 # --------------------------------------------------
 # LOGIN PARA MODO EDICIÓN
@@ -435,19 +250,8 @@ else:
 # --------------------------------------------------
 if archivo is not None and not st.session_state.get("archivo_guardado", False):
 
-    archivo_bytes = archivo.getbuffer()
-
-    # Guardar local (opcional)
     with open(ruta_excel, "wb") as f:
-        f.write(archivo_bytes)
-
-    # 🔥 Subir a GitHub
-    status, resp = subir_a_github(archivo_bytes, "control_caja_ejecutado.xlsx")
-
-    if status == 201:
-        st.success("✅ Archivo subido a GitHub correctamente")
-    else:
-        st.error(f"❌ Error al subir a GitHub: {resp}")
+        f.write(archivo.getbuffer())
 
     st.session_state["archivo_guardado"] = True
     st.session_state["mensaje_mostrado"] = False
@@ -864,8 +668,8 @@ if os.path.exists(ruta_excel):
         title="Ingresos vs Egresos",
         color="Tipo",
         color_discrete_map={
-        "Ingresos": "#169C5A",
-        "Egresos": "#E52521"
+            "Ingresos": "#5095B4",
+            "Egresos": "#BE2323"
         }
     )
 
