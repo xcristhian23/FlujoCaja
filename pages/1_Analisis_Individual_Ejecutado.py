@@ -28,6 +28,7 @@ import uuid
 import requests
 import base64
 import streamlit as st
+import time
 
 def subir_a_github(archivo_bytes, nombre_archivo):
 
@@ -437,12 +438,10 @@ if archivo is not None and not st.session_state.get("archivo_guardado", False):
 
     archivo_bytes = archivo.getbuffer()
 
-    # Guardar local (opcional)
-    with open(ruta_excel, "wb") as f:
-        f.write(archivo_bytes)
-
     # 🔥 Subir a GitHub
     status, resp = subir_a_github(archivo_bytes, "control_caja_ejecutado.xlsx")
+
+    time.sleep(2)  # esperar a que GitHub actualice
 
     if status == 201:
         st.success("🆕 Archivo creado en GitHub")
