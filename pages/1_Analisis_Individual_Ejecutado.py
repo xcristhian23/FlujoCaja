@@ -84,6 +84,35 @@ def subir_a_github(archivo_bytes, nombre_archivo):
 
     return response.status_code, response.json()
 
+def eliminar_de_github(nombre_archivo):
+
+    token = st.secrets["GITHUB_TOKEN"]
+    repo = "xcristhian23/FlujoCaja"
+    ruta = f"data/{nombre_archivo}"
+
+    url = f"https://api.github.com/repos/{repo}/contents/{ruta}"
+
+    headers = {
+        "Authorization": f"token {token}"
+    }
+
+    # 🔍 Obtener SHA del archivo
+    get_resp = requests.get(url, headers=headers)
+
+    if get_resp.status_code != 200:
+        return False, "Archivo no existe en GitHub"
+
+    sha = get_resp.json()["sha"]
+
+    data = {
+        "message": f"Eliminando {nombre_archivo}",
+        "sha": sha
+    }
+
+    delete_resp = requests.delete(url, json=data, headers=headers)
+
+    return delete_resp.status_code, delete_resp.json()
+
 def guardar_vista(filtros):
 
     view_id = uuid.uuid4().hex[:8]  # 8 caracteres
@@ -443,16 +472,29 @@ if es_admin:
 
     if st.sidebar.button("🗑️ Limpiar archivos guardados"):
 
+        # 🔥 1. ELIMINAR EN GITHUB
+        status, resp = eliminar_de_github("control_caja_ejecutado.xlsx")
+
+        if status in [200, 204]:
+            st.success("🗑️ Archivo eliminado de GitHub")
+        else:
+            st.warning("⚠️ No se pudo eliminar de GitHub o no existía")
+
+        # 🔥 2. ELIMINAR LOCAL
         if os.path.exists(ruta_excel):
             os.remove(ruta_excel)
 
-        # limpiar filtros
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+        # 🔥 3. LIMPIAR SESSION STATE (SIN ROMPER STREAMLIT)
+        for key in ["df", "archivo_bytes"]:
+            if key in st.session_state:
+                del st.session_state[key]
 
+        # 🔥 4. LIMPIAR FILTROS
         st.query_params.clear()
 
-        st.success("Archivos y filtros eliminados correctamente")
+        st.success("✅ Sistema limpio completamente (local + GitHub)")
+
+        time.sleep(1)
         st.rerun()
 # --------------------------------------------------
 # CARGA O RECUPERACIÓN DE ARCHIVO
