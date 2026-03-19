@@ -5,7 +5,7 @@ import zipfile
 import plotly.express as px
 import streamlit.components.v1 as components
 import plotly.io as pio
-import base64
+
 pio.kaleido.scope.default_format = "png"
 pio.kaleido.scope.default_scale = 2
 pio.kaleido.scope.default_width = 600
@@ -24,94 +24,6 @@ from reportlab.lib.styles import ParagraphStyle
 
 import json
 import uuid
-
-import requests
-import base64
-import streamlit as st
-import time
-
-import hashlib
-
-def hash_bytes(data):
-    return hashlib.md5(data).hexdigest()
-
-@st.cache_data(show_spinner=False)
-def cargar_excel_cache(origen_bytes):
-    df = pd.read_excel(BytesIO(origen_bytes))
-    df.columns = [normalizar(c) for c in df.columns]
-
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-    df["total_general_s"] = (
-        df["total_general_s"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .astype(float)
-    )
-
-    df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
-
-    return df
-def subir_a_github(archivo_bytes, nombre_archivo):
-
-    token = st.secrets["GITHUB_TOKEN"]
-    repo = "xcristhian23/FlujoCaja"
-    ruta = f"data/{nombre_archivo}"
-
-    url = f"https://api.github.com/repos/{repo}/contents/{ruta}"
-
-    headers = {
-        "Authorization": f"token {token}"
-    }
-
-    # 🔍 Obtener SHA si ya existe
-    get_resp = requests.get(url, headers=headers)
-
-    sha = None
-    if get_resp.status_code == 200:
-        sha = get_resp.json()["sha"]
-
-    contenido_base64 = base64.b64encode(archivo_bytes).decode()
-
-    data = {
-        "message": f"Actualizando {nombre_archivo}",
-        "content": contenido_base64
-    }
-
-    if sha:
-        data["sha"] = sha
-
-    response = requests.put(url, json=data, headers=headers)
-
-    return response.status_code, response.json()
-
-def eliminar_de_github(nombre_archivo):
-
-    token = st.secrets["GITHUB_TOKEN"]
-    repo = "xcristhian23/FlujoCaja"
-    ruta = f"data/{nombre_archivo}"
-
-    url = f"https://api.github.com/repos/{repo}/contents/{ruta}"
-
-    headers = {
-        "Authorization": f"token {token}"
-    }
-
-    # 🔍 Obtener SHA del archivo
-    get_resp = requests.get(url, headers=headers)
-
-    if get_resp.status_code != 200:
-        return False, "Archivo no existe en GitHub"
-
-    sha = get_resp.json()["sha"]
-
-    data = {
-        "message": f"Eliminando {nombre_archivo}",
-        "sha": sha
-    }
-
-    delete_resp = requests.delete(url, json=data, headers=headers)
-
-    return delete_resp.status_code, delete_resp.json()
 
 def guardar_vista(filtros):
 
@@ -137,133 +49,6 @@ def cargar_vista(view_id):
 
 st.set_page_config(page_title="Control de Caja 2026", layout="wide")
 
-st.markdown("""
-<style>
-
-/* =========================
-PALETA CORPORATIVA CVP
-========================= */
-
-:root{
---cvp-rojo:#E52521;
---cvp-verde:#169C5A;
---cvp-gris:#F5F5F5;
---cvp-text:#2B2B2B;
-}
-
-/* =========================
-FONDO GENERAL
-========================= */
-
-.stApp{
-background-color:var(--cvp-gris);
-font-family: "Segoe UI", system-ui;
-color:var(--cvp-text);
-}
-
-/* =========================
-TITULOS
-========================= */
-
-h1,h2,h3{
-font-weight:700;
-}
-
-/* =========================
-SIDEBAR
-========================= */
-
-section[data-testid="stSidebar"]{
-background:#ffffff;
-border-right:1px solid #eee;
-}
-
-/* =========================
-CARDS DASHBOARD
-========================= */
-
-.card{
-background:white;
-padding:20px;
-border-radius:14px;
-box-shadow:0 4px 14px rgba(0,0,0,0.08);
-margin-bottom:20px;
-}
-
-/* =========================
-KPIs
-========================= */
-
-[data-testid="metric-container"]{
-background:white;
-border-radius:14px;
-padding:18px;
-box-shadow:0 4px 14px rgba(0,0,0,0.08);
-border-left:5px solid var(--cvp-verde);
-}
-
-/* =========================
-BOTONES
-========================= */
-
-.stButton>button{
-background:var(--cvp-rojo);
-color:white;
-border:none;
-border-radius:8px;
-padding:10px 18px;
-font-weight:600;
-}
-
-.stButton>button:hover{
-background:#c11c18;
-}
-
-/* =========================
-DOWNLOAD BUTTON
-========================= */
-
-.stDownloadButton>button{
-background:var(--cvp-verde);
-color:white;
-border-radius:8px;
-}
-
-/* =========================
-DATAFRAME
-========================= */
-
-[data-testid="stDataFrame"]{
-border-radius:12px;
-overflow:hidden;
-}
-
-/* =========================
-RESPONSIVE MOBILE
-========================= */
-
-@media (max-width:768px){
-
-.block-container{
-padding:1rem;
-}
-
-[data-testid="metric-container"]{
-margin-bottom:10px;
-}
-
-h1{
-font-size:24px;
-}
-
-h2{
-font-size:20px;
-}
-
-}
-
-</style>
-""", unsafe_allow_html=True)
 # --------------------------------------------------
 # USUARIOS Y ROLES
 # --------------------------------------------------
@@ -334,7 +119,7 @@ if not os.path.exists("data/views"):
     os.makedirs("data/views")
 
 ruta_excel = "data/control_caja_ejecutado.xlsx"
-RUTA_GITHUB = f"https://raw.githubusercontent.com/xcristhian23/FlujoCaja/main/data/control_caja_ejecutado.xlsx?v={int(time.time())}"
+
 # --------------------------------------------------
 # Utilidades
 # --------------------------------------------------
@@ -349,70 +134,38 @@ def normalizar(col):
 # --------------------------------------------------
 # Cargar Excel
 # --------------------------------------------------
-from io import BytesIO
+def cargar_excel(archivo):
+    df = pd.read_excel(archivo)
+    df.columns = [normalizar(c) for c in df.columns]
 
-def cargar_excel(origen):
-    try:
-        if isinstance(origen, str):
-            df = pd.read_excel(origen)
-        else:
-            df = pd.read_excel(BytesIO(origen.getvalue()))
+    obligatorias = ["fecha", "total_general_s"]
+    for c in obligatorias:
+        if c not in df.columns:
+            st.error(f"❌ Falta la columna obligatoria: {c}")
+            st.stop()
 
-        df.columns = [normalizar(c) for c in df.columns]
+    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+    df["total_general_s"] = (
+        df["total_general_s"]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .astype(float)
+    )
 
-        obligatorias = ["fecha", "total_general_s"]
-        for c in obligatorias:
-            if c not in df.columns:
-                st.error(f"❌ Falta la columna obligatoria: {c}")
-                st.stop()
+    df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
 
-        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-        df["total_general_s"] = (
-            df["total_general_s"]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-            .astype(float)
-        )
-
-        df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
-
-        return df
-
-    except Exception as e:
-        st.error(f"❌ Error leyendo Excel: {e}")
-        st.stop()
+    return df
 
 # --------------------------------------------------
 # UI
 # --------------------------------------------------
-st.markdown(f"""
-    <div style="
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    background:white;
-    padding:14px 24px;
-    border-radius:14px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-    margin-bottom:20px;
-    ">
+col1, col2 = st.columns([6,1])
 
-    <div style="font-size:22px;font-weight:700;color:#E52521">
-    💰 Sistema Control de Caja 2026
-    </div>
+with col1:
+    st.title("💰 Sistema de Control de Caja - 2026 💰 ")
 
-    <div>
-    <img src="data:image/png;base64,{base64.b64encode(open('data/img/cvp.png','rb').read()).decode()}" width="160">
-    </div>
-
-    </div>
-    """, unsafe_allow_html=True)
-
-#with col1:
- #   st.title("💰 Sistema de Control de Caja - 2026 💰 ")
-
-#with col2:
- #   st.image("data/img/cvp.png", width=210)
+with col2:
+    st.image("data/img/cvp.png", width=210)
 
 # --------------------------------------------------
 # LOGIN PARA MODO EDICIÓN
@@ -472,29 +225,16 @@ if es_admin:
 
     if st.sidebar.button("🗑️ Limpiar archivos guardados"):
 
-        # 🔥 1. ELIMINAR EN GITHUB
-        status, resp = eliminar_de_github("control_caja_ejecutado.xlsx")
-
-        if status in [200, 204]:
-            st.success("🗑️ Archivo eliminado de GitHub")
-        else:
-            st.warning("⚠️ No se pudo eliminar de GitHub o no existía")
-
-        # 🔥 2. ELIMINAR LOCAL
         if os.path.exists(ruta_excel):
             os.remove(ruta_excel)
 
-        # 🔥 3. LIMPIAR SESSION STATE (SIN ROMPER STREAMLIT)
-        for key in ["df", "archivo_bytes"]:
-            if key in st.session_state:
-                del st.session_state[key]
+        # limpiar filtros
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
 
-        # 🔥 4. LIMPIAR FILTROS
         st.query_params.clear()
 
-        st.success("✅ Sistema limpio completamente (local + GitHub)")
-
-        time.sleep(1)
+        st.success("Archivos y filtros eliminados correctamente")
         st.rerun()
 # --------------------------------------------------
 # CARGA O RECUPERACIÓN DE ARCHIVO
@@ -508,67 +248,35 @@ else:
 # --------------------------------------------------
 # SI SE CARGA ARCHIVO NUEVO
 # --------------------------------------------------
-if archivo is not None:
+if archivo is not None and not st.session_state.get("archivo_guardado", False):
 
-    archivo_bytes = archivo.getvalue()
+    with open(ruta_excel, "wb") as f:
+        f.write(archivo.getbuffer())
 
-    # 🔥 Guardar en memoria (FUENTE REAL)
-    st.session_state["archivo_bytes"] = archivo_bytes
+    st.session_state["archivo_guardado"] = True
+    st.session_state["mensaje_mostrado"] = False
 
-    # 🔥 Procesar inmediato (sin esperar GitHub)
-    df = cargar_excel_cache(archivo_bytes)
-
-    # 🔥 Subir a GitHub en segundo plano lógico
-    status, resp = subir_a_github(archivo_bytes, "control_caja_ejecutado.xlsx")
-
-    if status in [200, 201]:
-        st.success("✅ Archivo sincronizado con GitHub")
-    else:
-        st.warning("⚠️ Se cargó local pero falló GitHub")
-
-    st.session_state["df"] = df
+    st.success("Archivo guardado correctamente")
 
 # --------------------------------------------------
 # CARGAR ARCHIVO SI EXISTE
 # --------------------------------------------------
-try:
+if os.path.exists(ruta_excel):
 
-    if "df" in st.session_state:
-        df = st.session_state["df"]
+    df = cargar_excel(ruta_excel)
 
-    elif "archivo_bytes" in st.session_state:
-        df = cargar_excel_cache(st.session_state["archivo_bytes"])
-        st.session_state["df"] = df
-        st.session_state["archivo_bytes"] = archivo_bytes
+    # 🔥 Limpiar filtros SOLO si se cargó archivo nuevo
+    if st.session_state.get("archivo_guardado", False) and not st.session_state.get("filtros_reseteados", False):
 
-        st.rerun()  # 🔥 fuerza recarga inmediata sin esperar GitHub
+        for key in list(st.session_state.keys()):
+            if key.startswith("filtro_"):
+                del st.session_state[key]
 
-    else:
-        # 🔥 INTENTAR CARGAR DESDE GITHUB CON REINTENTOS
-        success = False
+        st.session_state["filtros_reseteados"] = True
 
-        for i in range(3):  # 🔁 intenta 3 veces
-            response = requests.get(RUTA_GITHUB)
-
-            if response.status_code == 200:
-                archivo_bytes = response.content
-                df = cargar_excel_cache(archivo_bytes)
-
-                st.session_state["archivo_bytes"] = archivo_bytes
-                st.session_state["df"] = df
-
-                success = True
-                break
-
-            time.sleep(2)  # ⏳ esperar 2 segundos antes de reintentar
-
-        if not success:
-            st.warning("⚠️ No se pudo cargar desde GitHub (puede tardar en sincronizar)")
-            st.info("💡 Sube un archivo manualmente o intenta nuevamente en unos segundos")
-            st.stop()
-
-    st.success(f"✅ {len(df)} registros cargados")
-
+    if not st.session_state.get("mensaje_mostrado", False):
+        st.success(f"✅ {len(df)} registros cargados")
+        st.session_state["mensaje_mostrado"] = True
 
     # --------------------------------------------------
     # MANEJO GLOBAL DE URL
@@ -960,8 +668,8 @@ try:
         title="Ingresos vs Egresos",
         color="Tipo",
         color_discrete_map={
-        "Ingresos": "#169C5A",
-        "Egresos": "#E52521"
+            "Ingresos": "#5095B4",
+            "Egresos": "#BE2323"
         }
     )
 
@@ -1721,6 +1429,3 @@ try:
         file_name="reporte_control_caja_ejecutado.pdf",
         mime="application/pdf"
     )
-except Exception as e:
-    st.error(f"❌ Error real: {e}")
-    st.stop()
