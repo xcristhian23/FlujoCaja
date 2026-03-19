@@ -283,7 +283,7 @@ if not os.path.exists("data/views"):
     os.makedirs("data/views")
 
 ruta_excel = "data/control_caja_ejecutado.xlsx"
-
+RUTA_GITHUB = "https://raw.githubusercontent.com/xcristhian23/FlujoCaja/main/data/control_caja_ejecutado.xlsx"
 # --------------------------------------------------
 # Utilidades
 # --------------------------------------------------
@@ -298,8 +298,8 @@ def normalizar(col):
 # --------------------------------------------------
 # Cargar Excel
 # --------------------------------------------------
-def cargar_excel(archivo):
-    df = pd.read_excel(archivo)
+def cargar_excel(ruta):
+    df = pd.read_excel(ruta)  # 🔥 funciona con URL también
     df.columns = [normalizar(c) for c in df.columns]
 
     obligatorias = ["fecha", "total_general_s"]
@@ -445,9 +445,11 @@ if archivo is not None and not st.session_state.get("archivo_guardado", False):
     status, resp = subir_a_github(archivo_bytes, "control_caja_ejecutado.xlsx")
 
     if status == 201:
-        st.success("✅ Archivo subido a GitHub correctamente")
+        st.success("🆕 Archivo creado en GitHub")
+    elif status == 200:
+        st.success("♻️ Archivo actualizado en GitHub")
     else:
-        st.error(f"❌ Error al subir a GitHub: {resp}")
+        st.error(f"❌ Error real: {resp}")
 
     st.session_state["archivo_guardado"] = True
     st.session_state["mensaje_mostrado"] = False
@@ -457,9 +459,9 @@ if archivo is not None and not st.session_state.get("archivo_guardado", False):
 # --------------------------------------------------
 # CARGAR ARCHIVO SI EXISTE
 # --------------------------------------------------
-if os.path.exists(ruta_excel):
+try:
 
-    df = cargar_excel(ruta_excel)
+    df = cargar_excel(RUTA_GITHUB)
 
     # 🔥 Limpiar filtros SOLO si se cargó archivo nuevo
     if st.session_state.get("archivo_guardado", False) and not st.session_state.get("filtros_reseteados", False):
@@ -1625,3 +1627,6 @@ if os.path.exists(ruta_excel):
         file_name="reporte_control_caja_ejecutado.pdf",
         mime="application/pdf"
     )
+except Exception as e:
+    st.error("❌ No se pudo cargar el archivo desde GitHub")
+    st.stop()
