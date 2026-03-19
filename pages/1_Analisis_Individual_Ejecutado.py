@@ -30,6 +30,27 @@ import base64
 import streamlit as st
 import time
 
+import hashlib
+
+def hash_bytes(data):
+    return hashlib.md5(data).hexdigest()
+
+@st.cache_data(show_spinner=False)
+def cargar_excel_cache(origen_bytes):
+    df = pd.read_excel(BytesIO(origen_bytes))
+    df.columns = [normalizar(c) for c in df.columns]
+
+    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+    df["total_general_s"] = (
+        df["total_general_s"]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .astype(float)
+    )
+
+    df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
+
+    return df
 def subir_a_github(archivo_bytes, nombre_archivo):
 
     token = st.secrets["GITHUB_TOKEN"]
@@ -284,7 +305,7 @@ if not os.path.exists("data/views"):
     os.makedirs("data/views")
 
 ruta_excel = "data/control_caja_ejecutado.xlsx"
-RUTA_GITHUB = "https://raw.githubusercontent.com/xcristhian23/FlujoCaja/main/data/control_caja_ejecutado.xlsx"
+RUTA_GITHUB = f"https://raw.githubusercontent.com/xcristhian23/FlujoCaja/main/data/control_caja_ejecutado.xlsx?v={int(time.time())}"
 # --------------------------------------------------
 # Utilidades
 # --------------------------------------------------
@@ -445,51 +466,67 @@ else:
 # --------------------------------------------------
 # SI SE CARGA ARCHIVO NUEVO
 # --------------------------------------------------
-if archivo is not None and not st.session_state.get("archivo_guardado", False):
+if archivo is not None:
 
-    archivo_bytes = archivo.getbuffer()
+    archivo_bytes = archivo.getvalue()
 
-    # 🔥 Subir a GitHub
+    # 🔥 Guardar en memoria (FUENTE REAL)
+    st.session_state["archivo_bytes"] = archivo_bytes
+
+    # 🔥 Procesar inmediato (sin esperar GitHub)
+    df = cargar_excel_cache(archivo_bytes)
+
+    # 🔥 Subir a GitHub en segundo plano lógico
     status, resp = subir_a_github(archivo_bytes, "control_caja_ejecutado.xlsx")
 
-    time.sleep(2)  # esperar a que GitHub actualice
-
-    if status == 201:
-        st.success("🆕 Archivo creado en GitHub")
-    elif status == 200:
-        st.success("♻️ Archivo actualizado en GitHub")
+    if status in [200, 201]:
+        st.success("✅ Archivo sincronizado con GitHub")
     else:
-        st.error(f"❌ Error real: {resp}")
+        st.warning("⚠️ Se cargó local pero falló GitHub")
 
-    st.session_state["archivo_guardado"] = True
-    st.session_state["mensaje_mostrado"] = False
-
-    st.success("Archivo guardado correctamente")
+    st.session_state["df"] = df
 
 # --------------------------------------------------
 # CARGAR ARCHIVO SI EXISTE
 # --------------------------------------------------
 try:
 
-    if archivo is not None:
-        # 🔥 Leer directamente el archivo recién subido
-        df = cargar_excel(archivo)
+    if "df" in st.session_state:
+        df = st.session_state["df"]
+
+    elif "archivo_bytes" in st.session_state:
+        df = cargar_excel_cache(st.session_state["archivo_bytes"])
+        st.session_state["df"] = df
+        st.session_state["archivo_bytes"] = archivo_bytes
+
+        st.rerun()  # 🔥 fuerza recarga inmediata sin esperar GitHub
+
     else:
-        # 🔥 Solo si no hay archivo, leer de GitHub
-        df = cargar_excel(RUTA_GITHUB)
+        # 🔥 INTENTAR CARGAR DESDE GITHUB CON REINTENTOS
+        success = False
 
-    # 🔥 Limpiar filtros SOLO si se cargó archivo nuevo
-    if st.session_state.get("archivo_guardado", False) and not st.session_state.get("filtros_reseteados", False):
+        for i in range(3):  # 🔁 intenta 3 veces
+            response = requests.get(RUTA_GITHUB)
 
-        for key in list(st.session_state.keys()):
-            if key.startswith("filtro_"):
-                del st.session_state[key]
+            if response.status_code == 200:
+                archivo_bytes = response.content
+                df = cargar_excel_cache(archivo_bytes)
 
-        st.session_state["filtros_reseteados"] = True
+                st.session_state["archivo_bytes"] = archivo_bytes
+                st.session_state["df"] = df
 
-    if not st.session_state.get("mensaje_mostrado", False):
-        st.success(f"✅ {len(df)} registros cargados")
-        st.session_state["mensaje_mostrado"] = True
+                success = True
+                break
+
+            time.sleep(2)  # ⏳ esperar 2 segundos antes de reintentar
+
+        if not success:
+            st.warning("⚠️ No se pudo cargar desde GitHub (puede tardar en sincronizar)")
+            st.info("💡 Sube un archivo manualmente o intenta nuevamente en unos segundos")
+            st.stop()
+
+    st.success(f"✅ {len(df)} registros cargados")
+
 
     # --------------------------------------------------
     # MANEJO GLOBAL DE URL
@@ -1643,5 +1680,5 @@ try:
         mime="application/pdf"
     )
 except Exception as e:
-    st.error("❌ No se pudo cargar el archivo desde GitHub")
+    st.error(f"❌ Error real: {e}")
     st.stop()
