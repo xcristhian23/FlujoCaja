@@ -299,27 +299,38 @@ def normalizar(col):
 # --------------------------------------------------
 # Cargar Excel
 # --------------------------------------------------
-def cargar_excel(ruta):
-    df = pd.read_excel(ruta)  # 🔥 funciona con URL también
-    df.columns = [normalizar(c) for c in df.columns]
+from io import BytesIO
 
-    obligatorias = ["fecha", "total_general_s"]
-    for c in obligatorias:
-        if c not in df.columns:
-            st.error(f"❌ Falta la columna obligatoria: {c}")
-            st.stop()
+def cargar_excel(origen):
+    try:
+        if isinstance(origen, str):
+            df = pd.read_excel(origen)
+        else:
+            df = pd.read_excel(BytesIO(origen.getvalue()))
 
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-    df["total_general_s"] = (
-        df["total_general_s"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .astype(float)
-    )
+        df.columns = [normalizar(c) for c in df.columns]
 
-    df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
+        obligatorias = ["fecha", "total_general_s"]
+        for c in obligatorias:
+            if c not in df.columns:
+                st.error(f"❌ Falta la columna obligatoria: {c}")
+                st.stop()
 
-    return df
+        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+        df["total_general_s"] = (
+            df["total_general_s"]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .astype(float)
+        )
+
+        df["anio_mes"] = df["fecha"].dt.to_period("M").astype(str)
+
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Error leyendo Excel: {e}")
+        st.stop()
 
 # --------------------------------------------------
 # UI
@@ -460,7 +471,12 @@ if archivo is not None and not st.session_state.get("archivo_guardado", False):
 # --------------------------------------------------
 try:
 
-    df = cargar_excel(RUTA_GITHUB)
+    if archivo is not None:
+        # 🔥 Leer directamente el archivo recién subido
+        df = cargar_excel(archivo)
+    else:
+        # 🔥 Solo si no hay archivo, leer de GitHub
+        df = cargar_excel(RUTA_GITHUB)
 
     # 🔥 Limpiar filtros SOLO si se cargó archivo nuevo
     if st.session_state.get("archivo_guardado", False) and not st.session_state.get("filtros_reseteados", False):
