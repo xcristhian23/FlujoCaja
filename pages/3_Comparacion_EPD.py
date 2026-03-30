@@ -761,7 +761,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr) and os.path.exists(ruta_d
                 family="Arial Black",
                 color="#1F4E79"
             ),
-            width=0.35
+            width=0.25
         ))
 
         # ----------------------------------------
@@ -782,15 +782,33 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr) and os.path.exists(ruta_d
                 family="Arial Black",
                 color="#ED7D31"
             ),
-            width=0.35
+            width=0.25
         ))
-
         # ----------------------------------------
+        # Deuda
+        # ----------------------------------------
+        df_de_ie = ie[ie["tipo_archivo"] == "Deuda"]
+
+        fig_ie.add_trace(go.Bar(
+            x=df_de_ie["ingresoegreso"],
+            y=df_de_ie["total_general_s"],
+            name="Deuda",
+            marker_color="#C00000",
+            text=[f"S/ {v:,.0f}" for v in df_de_ie["total_general_s"]],
+            textposition="outside",
+            textfont=dict(
+                size=14,
+                family="Arial Black",
+                color="#C00000"
+            ),
+            width=0.25
+        ))
+                # ----------------------------------------
         # Layout ejecutivo
         # ----------------------------------------
     
 
-        max_y = ie["total_general_s"].max()
+        max_y = ie["total_general_s"].abs().max()
 
         fig_ie.update_layout(
 
@@ -820,7 +838,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr) and os.path.exists(ruta_d
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.05,
+                y=1.02,
                 xanchor="center",
                 x=0.5
             ),
@@ -1056,7 +1074,15 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr) and os.path.exists(ruta_d
             width=0.25,
             offsetgroup="3",
             text=[f"S/ {v:,.0f}" for v in graf_pivot["Deuda"]],
-            textposition="outside"
+            textposition="outside",
+            textangle=90,
+            constraintext="none",
+            textfont=dict(
+                size=16,
+                color="#C00000",
+                family="Arial Black"
+            ),
+            cliponaxis=False
         ))
 
 

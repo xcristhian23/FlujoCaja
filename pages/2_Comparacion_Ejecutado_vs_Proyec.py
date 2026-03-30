@@ -810,7 +810,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.05,
+                y=1.02,
                 xanchor="center",
                 x=0.5
             ),
