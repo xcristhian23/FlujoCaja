@@ -514,7 +514,7 @@ if os.path.exists(ruta_ej) and os.path.exists(ruta_pr):
 
     for col in columnas_filtro:
 
-        valores = sorted(df_filtrado[col].dropna().unique())
+        valores = sorted(df_filtrado[col].dropna().astype(str).unique())
         key = f"filtro_{col}"
         opciones = ["Todos"] + list(valores)
 
