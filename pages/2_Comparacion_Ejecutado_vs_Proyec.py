@@ -20,29 +20,220 @@ import json
 st.set_page_config(page_title="Control de Caja Comparativo", layout="wide")
 
 st.markdown("""
-    <style>
+<style>
 
-    .block-container {
-        padding-top: 1rem;
-    }
+/* ================================
+   🌙 TEMA GLOBAL DARK PRO
+   ================================ */
 
-    section[data-testid="stSidebar"] {
-        background: #F7F9FC;
-    }
+html, body, [class*="css"] {
+    font-family: "Segoe UI", Roboto, sans-serif;
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
 
-    h1,h2,h3 {
-        font-weight:600;
-    }
+/* Ocultar fondo blanco default */
+.main {
+    background-color: #0f172a !important;
+}
 
-    div[data-testid="metric-container"] {
-        background:white;
-        border-radius:10px;
-        padding:10px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.05);
-    }
+/* ================================
+   🎛️ ADMINISTRACIÓN - VISIBILIDAD PRO
+   ================================ */
 
-    </style>
-    """, unsafe_allow_html=True)
+/* Sidebar base */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(90deg,#1F4E79,#2E75B6);
+}
+
+/* 🔥 TÍTULOS (más visibles) */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+/* 🔥 LABELS (ANTES GRIS, AHORA BLANCO SUAVE) */
+section[data-testid="stSidebar"] label {
+    color: #f1f5f9 !important;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* 🔥 TEXTO GENERAL (más claro) */
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span {
+    color: #e2e8f0 !important;
+}
+
+/* 🔥 INPUTS (alto contraste) */
+section[data-testid="stSidebar"] input {
+    background-color: #020617 !important;
+    color: #ffffff !important;
+    border-radius: 10px !important;
+    border: 1px solid #334155 !important;
+}
+
+/* 🔥 SELECT / MULTISELECT */
+section[data-testid="stSidebar"] div[data-baseweb="select"] {
+    background-color: #020617 !important;
+    color: #ffffff !important;
+    border-radius: 10px !important;
+}
+
+/* 🔥 TEXTO DENTRO DEL SELECT (MUY IMPORTANTE) */
+section[data-testid="stSidebar"] div[data-baseweb="select"] span {
+    color: #ffffff !important;
+}
+
+/* 🔥 PLACEHOLDER */
+section[data-testid="stSidebar"] input::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* 🔥 TAGS (valores seleccionados) */
+section[data-testid="stSidebar"] span[data-baseweb="tag"] {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    font-weight: 500;
+}
+
+/* 🔥 BOTONES */
+section[data-testid="stSidebar"] .stButton>button {
+    background: #2563eb;
+    color: white !important;
+    border-radius: 8px;
+    border: none;
+    font-weight: 500;
+}
+
+/* 🔥 HOVER */
+section[data-testid="stSidebar"] .stButton>button:hover {
+    background: #1d4ed8;
+}
+
+/* 🔥 RADIO BUTTON (Comparar por) */
+section[data-testid="stSidebar"] div[role="radiogroup"] label {
+    color: #e2e8f0 !important;
+}
+
+/* 🔥 DATE INPUT */
+section[data-testid="stSidebar"] .stDateInput input {
+    color: white !important;
+}
+
+/* 🔥 DIVIDER */
+section[data-testid="stSidebar"] hr {
+    background: rgba(255,255,255,0.1);
+}
+
+/* ================================
+   💰 KPI CARDS POWER BI
+   ================================ */
+
+.card-hover {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    color: #e2e8f0;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.25s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+}
+
+/* ================================
+   📊 SECCIONES
+   ================================ */
+
+.section-default {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    padding: 14px 18px;
+    border-radius: 12px;
+    border-left: 4px solid #3b82f6;
+}
+
+/* ================================
+   📈 DATAFRAME PRO
+   ================================ */
+
+[data-testid="stDataFrame"] {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+    background: #020617;
+}
+
+/* ================================
+   📊 BOTONES (EXPORTAR)
+   ================================ */
+
+.stDownloadButton>button {
+    background: linear-gradient(90deg, #16a34a, #166534);
+    color: white !important;
+    border-radius: 10px;
+    border: none;
+}
+
+.stDownloadButton>button:hover {
+    transform: scale(1.02);
+}
+
+/* ================================
+   📉 GRÁFICOS
+   ================================ */
+
+.js-plotly-plot {
+    border-radius: 14px;
+    background: #020617 !important;
+}
+
+/* ================================
+   ✨ SCROLL PRO
+   ================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* ================================
+   🔥 TITULOS MÁS PREMIUM
+   ================================ */
+
+h1, h2, h3 {
+    letter-spacing: 0.3px;
+}
+
+/* ================================
+   🧠 KPI COLORES INTELIGENTES
+   ================================ */
+
+.kpi-ingreso {
+    border-left: 5px solid #16a34a !important;
+}
+
+.kpi-egreso {
+    border-left: 5px solid #dc2626 !important;
+}
+
+.kpi-saldo {
+    border-left: 5px solid #3b82f6 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # USUARIOS Y ROLES
