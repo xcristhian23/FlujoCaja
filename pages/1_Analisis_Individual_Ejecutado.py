@@ -48,7 +48,221 @@ def cargar_vista(view_id):
     return None
 
 st.set_page_config(page_title="Control de Caja 2026", layout="wide")
+st.markdown("""
+<style>
 
+/* ================================
+   🌙 TEMA GLOBAL DARK PRO
+   ================================ */
+
+html, body, [class*="css"] {
+    font-family: "Segoe UI", Roboto, sans-serif;
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+/* Ocultar fondo blanco default */
+.main {
+    background-color: #0f172a !important;
+}
+
+/* ================================
+   🎛️ ADMINISTRACIÓN - VISIBILIDAD PRO
+   ================================ */
+
+/* Sidebar base */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(90deg,#1F4E79,#2E75B6);
+}
+
+/* 🔥 TÍTULOS (más visibles) */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+/* 🔥 LABELS (ANTES GRIS, AHORA BLANCO SUAVE) */
+section[data-testid="stSidebar"] label {
+    color: #f1f5f9 !important;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* 🔥 TEXTO GENERAL (más claro) */
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span {
+    color: #e2e8f0 !important;
+}
+
+/* 🔥 INPUTS (alto contraste) */
+section[data-testid="stSidebar"] input {
+    background-color: #020617 !important;
+    color: #ffffff !important;
+    border-radius: 10px !important;
+    border: 1px solid #334155 !important;
+}
+
+/* 🔥 SELECT / MULTISELECT */
+section[data-testid="stSidebar"] div[data-baseweb="select"] {
+    background-color: #020617 !important;
+    color: #ffffff !important;
+    border-radius: 10px !important;
+}
+
+/* 🔥 TEXTO DENTRO DEL SELECT (MUY IMPORTANTE) */
+section[data-testid="stSidebar"] div[data-baseweb="select"] span {
+    color: #ffffff !important;
+}
+
+/* 🔥 PLACEHOLDER */
+section[data-testid="stSidebar"] input::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* 🔥 TAGS (valores seleccionados) */
+section[data-testid="stSidebar"] span[data-baseweb="tag"] {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    font-weight: 500;
+}
+
+/* 🔥 BOTONES */
+section[data-testid="stSidebar"] .stButton>button {
+    background: #2563eb;
+    color: white !important;
+    border-radius: 8px;
+    border: none;
+    font-weight: 500;
+}
+
+/* 🔥 HOVER */
+section[data-testid="stSidebar"] .stButton>button:hover {
+    background: #1d4ed8;
+}
+
+/* 🔥 RADIO BUTTON (Comparar por) */
+section[data-testid="stSidebar"] div[role="radiogroup"] label {
+    color: #e2e8f0 !important;
+}
+
+/* 🔥 DATE INPUT */
+section[data-testid="stSidebar"] .stDateInput input {
+    color: white !important;
+}
+
+/* 🔥 DIVIDER */
+section[data-testid="stSidebar"] hr {
+    background: rgba(255,255,255,0.1);
+}
+
+/* ================================
+   💰 KPI CARDS POWER BI
+   ================================ */
+
+.card-hover {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    color: #e2e8f0;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.25s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+}
+
+/* ================================
+   📊 SECCIONES
+   ================================ */
+
+.section-default {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    padding: 14px 18px;
+    border-radius: 12px;
+    border-left: 4px solid #3b82f6;
+}
+
+/* ================================
+   📈 DATAFRAME PRO
+   ================================ */
+
+[data-testid="stDataFrame"] {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+    background: #020617;
+}
+
+/* ================================
+   📊 BOTONES (EXPORTAR)
+   ================================ */
+
+.stDownloadButton>button {
+    background: linear-gradient(90deg, #16a34a, #166534);
+    color: white !important;
+    border-radius: 10px;
+    border: none;
+}
+
+.stDownloadButton>button:hover {
+    transform: scale(1.02);
+}
+
+/* ================================
+   📉 GRÁFICOS
+   ================================ */
+
+.js-plotly-plot {
+    border-radius: 14px;
+    background: #020617 !important;
+}
+
+/* ================================
+   ✨ SCROLL PRO
+   ================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* ================================
+   🔥 TITULOS MÁS PREMIUM
+   ================================ */
+
+h1, h2, h3 {
+    letter-spacing: 0.3px;
+}
+
+/* ================================
+   🧠 KPI COLORES INTELIGENTES
+   ================================ */
+
+.kpi-ingreso {
+    border-left: 5px solid #16a34a !important;
+}
+
+.kpi-egreso {
+    border-left: 5px solid #dc2626 !important;
+}
+
+.kpi-saldo {
+    border-left: 5px solid #3b82f6 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 # --------------------------------------------------
 # USUARIOS Y ROLES
 # --------------------------------------------------
@@ -162,10 +376,25 @@ def cargar_excel(archivo):
 col1, col2 = st.columns([6,1])
 
 with col1:
-    st.title("💰 Sistema de Control de Caja - 2026 💰 ")
+    st.markdown("""
+    <div style="
+    background: linear-gradient(90deg,#1F4E79,#2E75B6);
+    padding:18px;
+    border-radius:10px;
+    margin-bottom:15px;
+    color:white">
+
+    <h2 style="margin:0">💰 Control de Caja Ejecutado – 2026 💰</h2>
+    <span style="font-size:14px;opacity:0.9">
+    Análisis Financiero Ejecutado
+    </span>
+
+    </div>
+    """, unsafe_allow_html=True)
 
 with col2:
     st.image("data/img/cvp.png", width=210)
+
 
 # --------------------------------------------------
 # LOGIN PARA MODO EDICIÓN
@@ -329,7 +558,7 @@ if os.path.exists(ruta_excel):
     # CONFIGURACIÓN DE FILTROS
     # --------------------------------------------------
     if not modo_lectura:
-        st.sidebar.header("🎛️ Configuración de filtros")
+        st.sidebar.header("🎛️ Configuración De Filtros")
 
 
     columnas_disponibles = [
@@ -628,8 +857,20 @@ if os.path.exists(ruta_excel):
     # --------------------------------------------------
     # INGRESOS / EGRESOS / SALDO
     # --------------------------------------------------
-    st.divider()
+    st.markdown("""
+        <hr style="
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #ccc, transparent);
+        ">
+        """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="section-default">', unsafe_allow_html=True)
+
     st.subheader("📌 Resumen General")
+    st.caption("Vista general del comportamiento financiero")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if "ingresoegreso" not in df_filtrado.columns:
         st.error("❌ No existe la columna INGRESO/EGRESO en el Excel")
@@ -646,9 +887,35 @@ if os.path.exists(ruta_excel):
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("💵 Total Ingresos", f"S/ {total_ingresos:,.2f}")
-        col2.metric("💸 Total Egresos", f"S/ {total_egresos:,.2f}")
-        col3.metric("⚖️ Saldo", f"S/ {saldo:,.2f}")
+        def card(titulo, valor, color, icono):
+            st.markdown(f"""
+            <div class="card-hover" style="
+                background:white;
+                padding:22px;
+                border-radius:14px;
+                box-shadow:0px 4px 12px rgba(0,0,0,0.08);
+                border-left:6px solid {color};
+            ">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <p style="margin:0; color:gray; font-size:14px;">{titulo}</p>
+                        <h2 style="margin:0; color:{color};">S/ {valor:,.2f}</h2>
+                    </div>
+                    <div style="font-size:28px;">{icono}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        #col1, col2, col3 = st.columns(3)
+
+        with col1:
+            card("Ingresos", total_ingresos, "#5095B4", "📈")
+
+        with col2:
+            card("Egresos", total_egresos, "#dc2626", "📉") 
+
+        with col3:
+            card("Saldo", saldo, "#2563eb", "💰")
         
     st.divider()
     # Grafico ingreso y egresos
@@ -702,7 +969,8 @@ if os.path.exists(ruta_excel):
     # --------------------------------------------------
     # TABLA DINÁMICA
     # --------------------------------------------------
-    st.subheader("📊 Resultado")
+    st.markdown("## 📊 Resultado Financiero")
+    st.caption("Análisis dinámico basado en filtros aplicados")
 
     columnas_grupo = columnas_filtro.copy()
 
@@ -1086,7 +1354,9 @@ if os.path.exists(ruta_excel):
         bargap=0.25,
         bargroupgap=0.05,
         uniformtext_minsize=12,
-        uniformtext_mode="show"
+        uniformtext_mode="show",
+        plot_bgcolor="white",
+        paper_bgcolor="white"
     )
     #st.divider()
     # Grid suave
