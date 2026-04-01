@@ -384,7 +384,7 @@ with col1:
     margin-bottom:15px;
     color:white">
 
-    <h2 style="margin:0">💰 Control de Caja Ejecutado – 2026 💰</h2>
+    <h2 style="margin:0">💰 Control de Caja  –  Ejecutado 2026 💰</h2>
     <span style="font-size:14px;opacity:0.9">
     Análisis Financiero Ejecutado
     </span>
@@ -1022,14 +1022,31 @@ if os.path.exists(ruta_excel):
             .map(lambda x: f"{x:,.2f}")
         )
 
-    # Ordenar por costo__gasto si existe
+    # 🔥 ORDEN PROFESIONAL TIPO POWER BI
+    columnas_orden = []
+
+    # Mantener agrupación principal primero
     if "costo__gasto" in tabla.columns:
-        tabla = tabla.sort_values(
-            by=["costo__gasto", "total_general_s"],
-            ascending=[True, False]
+        columnas_orden.append("costo__gasto")
+
+    if "clasificacion_1" in tabla.columns:
+        columnas_orden.append("clasificacion_1")
+
+    if "clasificacion_flujo2" in tabla.columns:
+        columnas_orden.append("clasificacion_flujo2")
+
+    # 🔥 CLAVE: ordenar por mes_num (no por nombre)
+    if "mes_nombre" in tabla.columns:
+        # unir mes_num desde df original
+        tabla = tabla.merge(
+            df[["mes_nombre", "mes_num"]].drop_duplicates(),
+            on="mes_nombre",
+            how="left"
         )
-    else:
-        tabla = tabla.sort_values("total_general_s", ascending=False)
+        columnas_orden.append("mes_num")
+
+    # Orden final
+    tabla = tabla.sort_values(columnas_orden)
 
     # Formato moneda
     tabla["total_general_s_fmt"] = tabla["total_general_s"].map(
