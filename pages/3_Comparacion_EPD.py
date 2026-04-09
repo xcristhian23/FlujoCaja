@@ -162,7 +162,7 @@ section[data-testid="stSidebar"] hr {
 
 [data-testid="stDataFrame"] {
     border-radius: 14px;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid rgba(255,255,255,0.05);
     background: #020617;
 }
