@@ -191,7 +191,7 @@ section[data-testid="stSidebar"] hr {
 
 [data-testid="stDataFrame"] {
     border-radius: 14px;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid rgba(255,255,255,0.05);
     background: #020617;
 }
@@ -1070,8 +1070,7 @@ if os.path.exists(ruta_excel):
 
     st.dataframe(
         tabla_estilizada,
-        use_container_width=True,
-        height=460  # ajustado para 12 filas
+        use_container_width=True
     )
 
         # --------------------------------------------------
