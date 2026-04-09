@@ -1068,7 +1068,11 @@ if os.path.exists(ruta_excel):
         .set_properties(subset=["TOTAL"], **{"font-weight": "bold"})
     )
 
-    st.dataframe(tabla_estilizada, use_container_width=True)
+    st.dataframe(
+        tabla_estilizada,
+        use_container_width=True,
+        height=460  # ajustado para 12 filas
+    )
 
         # --------------------------------------------------
         # DETALLE
